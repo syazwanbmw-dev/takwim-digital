@@ -838,11 +838,18 @@ function timeRange(e){return e.allDay?'Sepanjang hari':timeOnly(e.start)+' – '
 const MONTH_SHORT_MS=['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogos','Sep','Okt','Nov','Dis'];
 function dateShort(v){const d=new Date(v);return d.getDate()+' '+MONTH_SHORT_MS[d.getMonth()]}
 function sameCalDay(a,b){const s=new Date(a),e=new Date(b);return s.getFullYear()===e.getFullYear()&&s.getMonth()===e.getMonth()&&s.getDate()===e.getDate()}
+// Google Calendar API guna 'end' EKSKLUSIF utk event 'sepanjang hari' (allDay) -- tengah
+// malam PERMULAAN hari LEPAS event tamat, bukan hari event itu sendiri. Cth "Hari Malaysia"
+// (1 hari, 16 Sep) sampai dari API sbg start=16 Sep 00:00, end=17 Sep 00:00. Tolak 1 saat
+// drpd end SEBELUM sebarang pengiraan/paparan "hari" utk event allDay, supaya hari terakhir
+// yg dikira ialah hari SEBENAR event, bukan hari lepasnya. Event berjadual (allDay=false,
+// cth Cuti Sekolah yg guru rekod dgn masa sebenar) tak disentuh -- end dia memang tepat.
+function displayEndDate(e){return e.allDay?new Date(new Date(e.end).getTime()-1000):new Date(e.end)}
 // Julat tarikh utk aktiviti pelbagai hari (cth "6 Okt – 8 Okt"); sehari sahaja kekal "6 Okt".
-function dateRangeShort(e){return sameCalDay(e.start,e.end)?dateShort(e.start):dateShort(e.start)+' – '+dateShort(e.end)}
+function dateRangeShort(e){const en=displayEndDate(e);return sameCalDay(e.start,en)?dateShort(e.start):dateShort(e.start)+' – '+dateShort(en)}
 // Utk card hero: kekalkan format penuh (hari+bulan panjang+tahun) bila sehari, tukar
 // julat pendek bila pelbagai hari (cth cuti penggal "28 Ogos – 6 Sep").
-function heroDateLine(e){return sameCalDay(e.start,e.end)?dateLong(e.start):dateRangeShort(e)}
+function heroDateLine(e){return sameCalDay(e.start,displayEndDate(e))?dateLong(e.start):dateRangeShort(e)}
 function dateLong(v){return new Date(v).toLocaleDateString('ms-MY',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 function dateTime(v){const d=new Date(v),p=n=>String(n).padStart(2,'0');return dateShort(v)+' '+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes())}
 function localInput(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
