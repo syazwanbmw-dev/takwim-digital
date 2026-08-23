@@ -659,7 +659,7 @@ function detailById(id){const all=[...DATA.todayEvents,...DATA.upcomingEvents,..
 function renderDetail(){closeModal('dateModal');const e=selectedEvent;const canManage=!e.isHoliday&&(e.category!=='cuti'||USER.role==='admin');detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete&&canManage?'<button class="btn danger" onclick="deleteEventUI(this)">Padam</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
 
 function eventRows(es){return es.length?es.map(e=>`<div class="eventRow" onclick='detailById(${j(e.id)})'><div>${timeOnly(e.start)}</div><div><div class="eventTitle">${esc(e.title)}</div><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}
-function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateShort(e.start)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}
+function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateRangeShort(e)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}
 
 function searchUI(){const q=searchBox.value.trim();if(!q)return;showPage('searchPage');searchPage.innerHTML='<div class="empty">Mencari…</div>';gs('searchCalendarEvents',[TOKEN,q],r=>{searchPage.innerHTML=`<h2>Carian: ${esc(q)}</h2>${bigList(r)}`})}
 function refreshData(){gs('getDashboardData',[TOKEN],r=>{DATA=r;CAL={year:r.month.year,month:r.month.monthIndex,label:r.month.label,events:r.monthEvents};renderAll();toast('Data dikemaskini.')})}
@@ -697,7 +697,16 @@ function ea(s=''){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
 function j(s){return JSON.stringify(String(s))}
 function timeOnly(v){return new Date(v).toLocaleTimeString('ms-MY',{hour:'2-digit',minute:'2-digit'})}
 function timeRange(e){return e.allDay?'Sepanjang hari':timeOnly(e.start)+' – '+timeOnly(e.end)}
-function dateShort(v){return new Date(v).toLocaleDateString('ms-MY',{day:'numeric',month:'short'})}
+// Senarai nama bulan pendek KITA sendiri (bukan toLocaleDateString) -- ICU ms-MY browser
+// singkat "Ogos" jadi "Ogo" (tak standard), jadual sendiri jamin Ogos kekal 4 huruf.
+const MONTH_SHORT_MS=['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogos','Sep','Okt','Nov','Dis'];
+function dateShort(v){const d=new Date(v);return d.getDate()+' '+MONTH_SHORT_MS[d.getMonth()]}
+// Julat tarikh utk aktiviti pelbagai hari (cth "6 Okt – 8 Okt"); sehari sahaja kekal "6 Okt".
+function dateRangeShort(e){
+  const s=new Date(e.start),en=new Date(e.end);
+  const sameDay=s.getFullYear()===en.getFullYear()&&s.getMonth()===en.getMonth()&&s.getDate()===en.getDate();
+  return sameDay?dateShort(e.start):dateShort(e.start)+' – '+dateShort(e.end);
+}
 function dateLong(v){return new Date(v).toLocaleDateString('ms-MY',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 function dateTime(v){return new Date(v).toLocaleString('ms-MY',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
 function localInput(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
