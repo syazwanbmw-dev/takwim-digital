@@ -174,8 +174,13 @@ const CATEGORY_CONFIG = {
   lawatan:   { label: 'Lawatan',   color: CalendarApp.EventColor.ORANGE },
   taklimat:  { label: 'Taklimat',  color: CalendarApp.EventColor.MAUVE },
   deadline:  { label: 'Deadline',  color: CalendarApp.EventColor.RED },
-  lain:      { label: 'Lain-lain', color: CalendarApp.EventColor.GRAY }
+  lain:      { label: 'Lain-lain', color: CalendarApp.EventColor.GRAY },
+  cuti:      { label: '🎉 Cuti',   color: CalendarApp.EventColor.YELLOW }
 };
+
+// Calendar rasmi Google "Holidays in Malaysia" -- ID kekal sama setiap tahun,
+// Google update senarai cuti sendiri (termasuk cuti bertarikh bergerak macam Diwali/Hari Raya).
+const HOLIDAY_CALENDAR_ID = 'en.malaysia#holiday@group.v.calendar.google.com';
 
 const ROLE_CONFIG = {
   admin: {
@@ -552,7 +557,9 @@ function getMonthData(token, year, monthIndex) {
   const cal = getPPDCalendar_();
   const start = new Date(Number(year), Number(monthIndex), 1);
   const end = new Date(Number(year), Number(monthIndex) + 1, 1);
-  const events = safeGetEvents_(cal, start, end).map(eventToObject_).sort(sortByStart_);
+  const events = safeGetEvents_(cal, start, end).map(eventToObject_)
+    .concat(getHolidayEvents_(start, end))
+    .sort(sortByStart_);
 
   return {
     year: Number(year),
@@ -572,7 +579,9 @@ function getEventsForDate(token, dateStr) {
   const end = new Date(p[0], p[1] - 1, p[2], 23, 59, 59, 999);
 
   const cal = getPPDCalendar_();
-  const events = safeGetEvents_(cal, start, end).map(eventToObject_).sort(sortByStart_);
+  const events = safeGetEvents_(cal, start, end).map(eventToObject_)
+    .concat(getHolidayEvents_(start, end))
+    .sort(sortByStart_);
 
   return {
     date: dateStr,
@@ -1020,12 +1029,17 @@ function getDashboardDataInternal_() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const todayEvents = safeGetEvents_(cal, todayStart, todayEnd).map(eventToObject_).sort(sortByStart_);
+  const todayEvents = safeGetEvents_(cal, todayStart, todayEnd).map(eventToObject_)
+    .concat(getHolidayEvents_(todayStart, todayEnd))
+    .sort(sortByStart_);
   const upcomingEvents = safeGetEvents_(cal, todayStart, upcomingEnd)
     .map(eventToObject_)
+    .concat(getHolidayEvents_(todayStart, upcomingEnd))
     .filter(function(e) { return new Date(e.end) >= now; })
     .sort(sortByStart_);
-  const monthEvents = safeGetEvents_(cal, monthStart, monthEnd).map(eventToObject_).sort(sortByStart_);
+  const monthEvents = safeGetEvents_(cal, monthStart, monthEnd).map(eventToObject_)
+    .concat(getHolidayEvents_(monthStart, monthEnd))
+    .sort(sortByStart_);
   const reminders = upcomingEvents.filter(function(e) { return e.hasReminder; }).slice(0, 12);
 
   return {
@@ -1055,6 +1069,37 @@ function getPPDCalendar_() {
   const cal = CalendarApp.getCalendarById(getConfig_().CALENDAR_ID);
   if (!cal) throw new Error('Calendar sistem tidak dapat diakses oleh pemilik script.');
   return cal;
+}
+
+// Gagal-selamat: kalau calendar cuti tak boleh diakses (mis. sekatan domain),
+// pulangkan senarai kosong sahaja -- JANGAN pecahkan dashboard sekolah sebab ni.
+function getHolidayEvents_(start, end) {
+  try {
+    const cal = CalendarApp.getCalendarById(HOLIDAY_CALENDAR_ID);
+    if (!cal) return [];
+    return cal.getEvents(start, end).map(holidayToObject_);
+  } catch (e) {
+    return [];
+  }
+}
+
+function holidayToObject_(event) {
+  return {
+    id: event.getId(),
+    title: event.getTitle() || '(Cuti)',
+    description: '',
+    location: '',
+    start: event.getStartTime().toISOString(),
+    end: event.getEndTime().toISOString(),
+    allDay: event.isAllDayEvent(),
+    category: 'cuti',
+    categoryLabel: CATEGORY_CONFIG.cuti.label,
+    hasReminder: false,
+    reminderMinutes: 0,
+    pic: '',
+    agency: '',
+    isHoliday: true
+  };
 }
 
 function safeGetEvents_(calendar, start, end) {
@@ -1156,14 +1201,16 @@ function validateEventPayload_(payload) {
 }
 
 function buildReport_(events) {
+  // Cuti/perayaan dikecualikan -- laporan ni track aktiviti kerja sekolah sahaja.
+  const workEvents = events.filter(function(e) { return !e.isHoliday; });
   const counts = { program:0, mesyuarat:0, lawatan:0, taklimat:0, deadline:0, lain:0 };
-  events.forEach(function(e) {
+  workEvents.forEach(function(e) {
     if (counts[e.category] !== undefined) counts[e.category]++;
     else counts.lain++;
   });
 
   return {
-    total: events.length,
+    total: workEvents.length,
     rows: Object.keys(counts).map(function(key) {
       return { key:key, label:CATEGORY_CONFIG[key].label, count:counts[key] };
     })
