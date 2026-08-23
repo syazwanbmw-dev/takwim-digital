@@ -38,7 +38,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 .search{width:320px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 13px;outline:none;box-shadow:var(--shadow-sm)}
 .page{display:none}.page.active{display:block}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:14px}.stat{background:#fff;border:1px solid var(--line);border-radius:17px;padding:17px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}.stat:after{content:"";position:absolute;width:70px;height:70px;border-radius:50%;right:-22px;top:-22px;background:rgba(11,110,243,.05)}.stat strong{font-size:33px;display:block;line-height:1}.stat span{font-size:12px;color:var(--muted);margin-top:6px;display:block}
-.grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}.heroDots{display:flex;gap:6px;margin-top:18px}.heroDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:0;padding:0}.heroDot.active{background:#fff}
+.grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}.heroDots{display:flex;gap:6px;margin-top:18px}.heroDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:0;padding:0}.heroDot.active{background:#fff}#heroBody{transition:transform .28s ease,opacity .28s ease}
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}.cardHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.cardHead h3{margin:0;font-size:18px}
 .quick{display:grid;gap:9px}.quick button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;text-align:left;font-weight:740}.quick button:hover{background:#f8fbff;border-color:#c8dcfa}
 .calToolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.calToolbar button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-weight:750}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:10px;color:var(--muted);font-weight:850;padding-bottom:3px}.day{min-height:44px;padding:6px;border-radius:10px;text-align:center;cursor:pointer;font-size:12px}.day:hover{background:#edf5ff}.day.holiday{background:#fff4d6}.day.today{background:var(--primary);color:#fff;font-weight:800}.blank{opacity:0;pointer-events:none}.dots{display:flex;justify-content:center;gap:2px;margin-top:4px}.dot{width:5px;height:5px;border-radius:50%}.program{background:#1872e8}.mesyuarat{background:#18a467}.lawatan{background:#f07a24}.taklimat{background:#7d58d8}.deadline{background:#e34b50}.lain{background:#8995a6}.cuti{background:#dba617}
@@ -528,24 +528,45 @@ function stat(label,n){return `<div class="stat"><strong>${n}</strong><span>${la
 // SENARAI (DATA.upcomingEvents, 7 hari akan datang, data sama yg dipakai card "Akan Datang")
 // dan auto-slide setiap 5 saat + dots boleh klik terus ke satu-satu. hero() bina skeleton
 // sahaja -- kandungan slaid pertama diisi heroInit() lepas skeleton tu sebenar dlm DOM.
-let HERO_EVENTS=[],HERO_IDX=0,HERO_TIMER=null;
+let HERO_EVENTS=[],HERO_IDX=0,HERO_TIMER=null,HERO_ANIM=false;
 function hero(events){
   if(!events||!events.length)return `<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>Tiada aktiviti akan datang</h2></div>`;
   const dots=events.length>1?`<div id="heroDots" class="heroDots"></div>`:'';
   return `<div class="hero"><small>AKTIVITI SETERUSNYA${events.length>1?' ('+events.length+')':''}</small><div id="heroBody"></div>${dots}</div>`;
 }
 function heroInit(events){
-  HERO_EVENTS=events||[];HERO_IDX=0;
+  HERO_EVENTS=events||[];HERO_IDX=0;HERO_ANIM=false;
   if(HERO_TIMER){clearInterval(HERO_TIMER);HERO_TIMER=null}
   if(!HERO_EVENTS.length)return;
-  heroRender();
+  heroPaintBody(HERO_EVENTS[0]);heroPaintDots(); // paint pertama -- statik, tiada slide
   if(HERO_EVENTS.length>1)HERO_TIMER=setInterval(()=>heroGoTo((HERO_IDX+1)%HERO_EVENTS.length),5000);
 }
-function heroGoTo(i){HERO_IDX=i;heroRender()}
-function heroRender(){
-  const e=HERO_EVENTS[HERO_IDX];if(!e)return;
+// Slaid ke aktiviti lain: kad semasa keluar ke KIRI + pudar, tukar kandungan semasa
+// tak nampak (posisi kanan, transition dimatikan sekejap), baru masuk dari KANAN ke tengah.
+// Kesannya kandungan "bergerak ke kiri" -- macam next-carousel biasa. Guard HERO_ANIM elak
+// klik dot beberapa kali pantas / bertembung dgn auto-slide 5 saat bertindih.
+function heroGoTo(i){
+  if(HERO_ANIM||i===HERO_IDX)return;
   const body=document.getElementById('heroBody');
-  if(body)body.innerHTML=`<h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${dateLong(e.start)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button>`;
+  if(!body){HERO_IDX=i;return}
+  HERO_ANIM=true;
+  body.style.transform='translateX(-24px)';body.style.opacity='0';
+  setTimeout(()=>{
+    HERO_IDX=i;
+    body.style.transition='none';
+    body.style.transform='translateX(24px)';body.style.opacity='0';
+    heroPaintBody(HERO_EVENTS[HERO_IDX]);heroPaintDots();
+    void body.offsetWidth; // paksa reflow -- posisi "kanan" ni kena terpakai SEBELUM transition dihidupkan semula
+    body.style.transition='';
+    body.style.transform='translateX(0)';body.style.opacity='1';
+    HERO_ANIM=false;
+  },280);
+}
+function heroPaintBody(e){
+  const body=document.getElementById('heroBody');
+  if(body)body.innerHTML=`<h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${heroDateLine(e)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button>`;
+}
+function heroPaintDots(){
   const dots=document.getElementById('heroDots');
   if(dots)dots.innerHTML=HERO_EVENTS.map((_,i)=>`<span class="heroDot${i===HERO_IDX?' active':''}" onclick="heroGoTo(${i})"></span>`).join('');
 }
@@ -728,12 +749,12 @@ function timeRange(e){return e.allDay?'Sepanjang hari':timeOnly(e.start)+' – '
 // singkat "Ogos" jadi "Ogo" (tak standard), jadual sendiri jamin Ogos kekal 4 huruf.
 const MONTH_SHORT_MS=['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogos','Sep','Okt','Nov','Dis'];
 function dateShort(v){const d=new Date(v);return d.getDate()+' '+MONTH_SHORT_MS[d.getMonth()]}
+function sameCalDay(a,b){const s=new Date(a),e=new Date(b);return s.getFullYear()===e.getFullYear()&&s.getMonth()===e.getMonth()&&s.getDate()===e.getDate()}
 // Julat tarikh utk aktiviti pelbagai hari (cth "6 Okt – 8 Okt"); sehari sahaja kekal "6 Okt".
-function dateRangeShort(e){
-  const s=new Date(e.start),en=new Date(e.end);
-  const sameDay=s.getFullYear()===en.getFullYear()&&s.getMonth()===en.getMonth()&&s.getDate()===en.getDate();
-  return sameDay?dateShort(e.start):dateShort(e.start)+' – '+dateShort(e.end);
-}
+function dateRangeShort(e){return sameCalDay(e.start,e.end)?dateShort(e.start):dateShort(e.start)+' – '+dateShort(e.end)}
+// Utk card hero: kekalkan format penuh (hari+bulan panjang+tahun) bila sehari, tukar
+// julat pendek bila pelbagai hari (cth cuti penggal "28 Ogos – 6 Sep").
+function heroDateLine(e){return sameCalDay(e.start,e.end)?dateLong(e.start):dateRangeShort(e)}
 function dateLong(v){return new Date(v).toLocaleDateString('ms-MY',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
 function dateTime(v){const d=new Date(v),p=n=>String(n).padStart(2,'0');return dateShort(v)+' '+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes())}
 function localInput(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
