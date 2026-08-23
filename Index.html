@@ -153,8 +153,8 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 <div id="authScreen" class="centerShell">
   <div class="authCard">
     <div class="logo">🏛️</div>
-    <h1 id="authAppName">Dashboard Calendar</h1>
-    <p id="authOfficeName" class="sub">Sistem aktiviti organisasi.</p>
+    <h1 id="authAppName"><?= appName ?></h1>
+    <p id="authOfficeName" class="sub">Takwim <?= officeName ?>.</p>
 
     <div class="tabs">
       <button id="loginTab" class="tab active" onclick="switchAuth('login')">Log Masuk</button>
@@ -198,7 +198,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 
 <div id="appScreen" class="app hidden">
   <aside id="sidebar" class="sidebar">
-    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandShortName">Calendar</h2><small id="brandOfficeName">Organisasi</small></div>
+    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandShortName"><?= shortName ?></h2><small id="brandOfficeName"><?= officeName ?></small></div>
     <nav class="nav">
       <button class="navbtn active" data-page="dashboardPage">▦ Dashboard</button>
       <button class="navbtn" data-page="calendarPage">▣ Calendar</button>
@@ -215,7 +215,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 
   <main class="main">
     <header class="topbar">
-      <div><button class="hamb btn secondary" onclick="sidebar.classList.toggle('open')">☰</button><h1 id="topAppName">Dashboard Calendar</h1><div id="topMeta" class="meta"></div></div>
+      <div><button class="hamb btn secondary" onclick="sidebar.classList.toggle('open')">☰</button><h1 id="topAppName"><?= appName ?></h1><div id="topMeta" class="meta"></div></div>
       <div class="topRight"><input id="searchBox" class="search" placeholder="Cari aktiviti..." onkeydown="if(event.key==='Enter')searchUI()"><button id="topAdd" class="btn primary" onclick="openEventForm()">+ Tambah Aktiviti</button></div>
     </header>
 
@@ -350,7 +350,7 @@ function applyBranding(cfg){
 
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v||''};
   set('authAppName',cfg.appName||'Dashboard Calendar');
-  set('authOfficeName','Sistem aktiviti '+(cfg.officeName||'organisasi')+'.');
+  set('authOfficeName','Takwim '+(cfg.officeName||'organisasi')+'.');
   set('brandShortName',cfg.shortName||'Calendar');
   set('brandOfficeName',cfg.officeName||'Organisasi');
   set('topAppName',cfg.appName||'Dashboard Calendar');
@@ -525,7 +525,15 @@ function renderDashboard(){
 function stat(label,n){return `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`}
 function hero(e){return e?`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${dateLong(e.start)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button></div>`:`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>Tiada aktiviti akan datang</h2></div>`}
 
-function renderCalendar(){calendarPage.innerHTML='<h2>Calendar Interaktif</h2><div id="fullCalendar" class="card"></div>';renderCal('fullCalendar')}
+function renderCalendar(){calendarPage.innerHTML='<h2>Calendar Interaktif</h2><div id="fullCalendar" class="card"></div><div id="calMonthList" class="card" style="margin-top:14px"></div>';renderCal('fullCalendar');renderCalMonthList()}
+// Senarai semua aktiviti bulan yang ditunjuk kalendar -- guna CAL.events sedia ada
+// (data sama yg bina dot kalendar), reuse bigList() macam page Akan Datang/Carian.
+function renderCalMonthList(){
+  const box=document.getElementById('calMonthList');
+  if(!box)return;
+  const sorted=[...CAL.events].sort((a,b)=>new Date(a.start)-new Date(b.start));
+  box.innerHTML=`<div class="cardHead"><h3>Aktiviti ${esc(CAL.label)}</h3></div>${bigList(sorted)}`;
+}
 function renderCal(id){
   const el=document.getElementById(id);if(!el)return;
   const y=CAL.year,m=CAL.month,first=new Date(y,m,1),last=new Date(y,m+1,0),offset=(first.getDay()+6)%7;
@@ -542,8 +550,8 @@ function renderCal(id){
   }
   el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid">${cells}</div>`;
 }
-function changeMonth(delta){let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar')})}
-function goToday(){const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar')})}
+function changeMonth(delta){let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
+function goToday(){const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
 function openDate(ds){gs('getEventsForDate',[TOKEN,ds],r=>{dateBox.innerHTML=`<div class="modalHead"><h3>${esc(r.label)}</h3><button class="close" onclick="closeModal('dateModal')">×</button></div>${r.events.length?eventRows(r.events):'<div class="empty">Tiada aktiviti.</div>'}<div class="modalActions">${PERMS.canCreate?`<button class="btn primary" onclick="closeModal('dateModal');openEventForm('${ds}')">+ Tambah Aktiviti</button>`:''}</div>`;dateModal.classList.add('show')})}
 
 function renderToday(){todayPage.innerHTML=`<h2>Aktiviti Hari Ini</h2>${bigList(DATA.todayEvents)}`}

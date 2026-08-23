@@ -204,9 +204,17 @@ function doGet() {
   ensureSecuritySalt_();
   if (isInstalled_()) ensureAdminRecord_();
 
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle(getConfig_().APP_NAME)
+  // Suntik nama/label sebenar terus dari server sebelum HTML sampai ke browser --
+  // elak "flash" nama default (Dashboard Calendar) semasa client tunggu round-trip
+  // getBootstrapState() yang boleh ambil 1-2 saat pada Apps Script.
+  const cfg = getPublicConfig();
+  const tpl = HtmlService.createTemplateFromFile('Index');
+  tpl.appName = cfg.appName;
+  tpl.officeName = cfg.officeName;
+  tpl.shortName = cfg.shortName;
+
+  return tpl.evaluate()
+    .setTitle(cfg.appName)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
