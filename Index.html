@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  
+<style>
+:root{
+  --nav:#062d67;--nav2:#0a4d9f;--primary:#0b6ef3;--primary2:#0757c4;
+  --bg:#f5f8fc;--card:#fff;--text:#10223d;--muted:#6f7f93;--line:#e5ebf3;
+  --danger:#d9464c;--success:#12875a;--warning:#d88a16;--purple:#7357d8;
+  --shadow:0 12px 32px rgba(22,46,82,.08);--shadow-sm:0 6px 18px rgba(22,46,82,.06)
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:none!important}
+
+/* LOGIN / REGISTER */
+.centerShell{min-height:100vh;display:grid;place-items:center;padding:22px;background:radial-gradient(circle at 85% 10%,rgba(11,110,243,.14),transparent 26%),radial-gradient(circle at 15% 85%,rgba(3,72,145,.10),transparent 28%),linear-gradient(180deg,#f8fbff,#eef4fb)}
+.authCard{width:min(560px,100%);background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:26px;padding:30px;box-shadow:0 24px 70px rgba(11,43,84,.13)}
+.logo{width:66px;height:66px;border-radius:20px;background:linear-gradient(135deg,var(--nav),var(--primary));color:#fff;display:grid;place-items:center;font-size:31px;margin-bottom:18px;box-shadow:0 10px 24px rgba(11,110,243,.25)}
+.authCard h1{font-size:30px;line-height:1.1;margin:0 0 8px}.sub{color:var(--muted);line-height:1.55;margin:0}
+.tabs{display:flex;gap:6px;background:#eff4f9;padding:5px;border-radius:13px;margin:22px 0}.tab{flex:1;border:0;background:transparent;padding:11px 12px;border-radius:10px;font-weight:800;color:#566478}.tab.active{background:#fff;color:var(--primary);box-shadow:0 4px 12px rgba(13,50,95,.08)}
+.field{margin:13px 0}.field label{display:block;font-size:11px;font-weight:850;margin-bottom:7px;letter-spacing:.03em}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#9fc4fb;box-shadow:0 0 0 4px rgba(11,110,243,.08)}
+.btn{border:0;padding:12px 16px;border-radius:12px;font-weight:800}.primary{background:linear-gradient(135deg,var(--primary),#0b63da);color:#fff;box-shadow:0 8px 18px rgba(11,110,243,.18)}.secondary{background:#fff;color:var(--text);border:1px solid var(--line)}.danger{background:#ffe9eb;color:#b62f36}.full{width:100%}
+.row{display:flex;gap:10px}.row>*{flex:1}.notice{padding:13px 14px;border-radius:12px;background:#edf6ff;color:#2f639d;font-size:13px;line-height:1.5;margin:12px 0;border:1px solid #d8e9fb}.pending{background:#fff7df;color:#87610f;border-color:#f0dfad}.error{background:#ffecee;color:#a52f35}.otpBox{font-size:24px;letter-spacing:7px;text-align:center;font-weight:800}
+
+/* APP */
+.app{display:flex;min-height:100vh}
+.sidebar{width:252px;position:fixed;inset:0 auto 0 0;background:linear-gradient(180deg,#082f69 0%,#052657 100%);color:#fff;padding:18px 14px;display:flex;flex-direction:column;z-index:30;box-shadow:8px 0 26px rgba(8,34,75,.08)}
+.brand{padding:10px 12px 20px;border-bottom:1px solid rgba(255,255,255,.12)}.brand h2{margin:8px 0 2px;font-size:22px}.brand small{opacity:.74;line-height:1.4}
+.nav{padding:18px 0;display:grid;gap:6px}.navbtn{border:0;background:transparent;color:#fff;text-align:left;padding:12px 13px;border-radius:12px;font-weight:720;opacity:.88}.navbtn.active,.navbtn:hover{background:linear-gradient(90deg,#0b6ef3,#0a58bf);opacity:1;box-shadow:0 6px 14px rgba(6,42,91,.18)}
+.profile{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding:14px 8px}.profile b,.profile small{display:block}.profile b{font-size:13px}.profile small{opacity:.7;margin-top:3px;font-size:11px}
+.main{margin-left:252px;width:calc(100% - 252px);padding:24px 26px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;position:sticky;top:0;z-index:20;background:rgba(245,248,252,.92);backdrop-filter:blur(10px);padding:8px 0 12px}
+.topbar h1{margin:0;font-size:30px;letter-spacing:-.02em}.meta{font-size:12px;color:var(--muted);margin-top:6px}.topRight{display:flex;gap:9px;align-items:center}
+.search{width:320px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 13px;outline:none;box-shadow:var(--shadow-sm)}
+.page{display:none}.page.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:14px}.stat{background:#fff;border:1px solid var(--line);border-radius:17px;padding:17px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}.stat:after{content:"";position:absolute;width:70px;height:70px;border-radius:50%;right:-22px;top:-22px;background:rgba(11,110,243,.05)}.stat strong{font-size:33px;display:block;line-height:1}.stat span{font-size:12px;color:var(--muted);margin-top:6px;display:block}
+.grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}.cardHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.cardHead h3{margin:0;font-size:18px}
+.quick{display:grid;gap:9px}.quick button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;text-align:left;font-weight:740}.quick button:hover{background:#f8fbff;border-color:#c8dcfa}
+.calToolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.calToolbar button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-weight:750}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:10px;color:var(--muted);font-weight:850;padding-bottom:3px}.day{min-height:44px;padding:6px;border-radius:10px;text-align:center;cursor:pointer;font-size:12px}.day:hover{background:#edf5ff}.day.today{background:var(--primary);color:#fff;font-weight:800}.blank{opacity:0;pointer-events:none}.dots{display:flex;justify-content:center;gap:2px;margin-top:4px}.dot{width:5px;height:5px;border-radius:50%}.program{background:#1872e8}.mesyuarat{background:#18a467}.lawatan{background:#f07a24}.taklimat{background:#7d58d8}.deadline{background:#e34b50}.lain{background:#8995a6}
+.lower{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px}.eventRow{padding:12px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:72px 1fr auto;gap:9px;cursor:pointer;align-items:start}.eventRow:first-child{border-top:0}.eventTitle{font-size:13px;font-weight:780;line-height:1.35}.eventSub{font-size:11px;color:var(--muted);margin-top:4px}
+.badge{font-size:10px;border-radius:999px;padding:5px 9px;background:#eef3fa;white-space:nowrap;font-weight:750}.badge.editor{background:#e5f7ef;color:#08774a}.badge.viewer{background:#edf1f6;color:#536174}.badge.admin{background:#e7efff;color:#2053a5}.badge.pending{background:#fff2d8;color:#9b6812}.badge.suspended{background:#ffe8e9;color:#b63339}.badge.rejected{background:#f1f1f1;color:#666}
+.list{display:grid;gap:11px}.bigEvent,.userRow,.auditRow{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 16px;display:grid;gap:12px;align-items:center;box-shadow:var(--shadow-sm)}.bigEvent{grid-template-columns:110px 1fr auto}.userRow{grid-template-columns:1fr 170px auto}.auditRow{grid-template-columns:170px 1fr 1.5fr}.userRow:hover,.bigEvent:hover{border-color:#c7dafa}.actions{display:flex;gap:7px;flex-wrap:wrap}.actions select{border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff}
+.modal{display:none;position:fixed;inset:0;background:rgba(5,20,42,.48);align-items:center;justify-content:center;padding:18px;z-index:100}.modal.show{display:flex}.modalBox{width:min(700px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:22px;padding:22px;box-shadow:0 26px 80px rgba(7,31,68,.25)}.modalHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.close{border:0;background:transparent;font-size:26px;color:var(--muted)}.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.formGrid .wide{grid-column:1/-1}.modalActions{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}.empty{color:var(--muted);text-align:center;padding:24px}
+.toast{display:none;position:fixed;right:20px;bottom:20px;background:#112847;color:#fff;padding:13px 16px;border-radius:12px;z-index:200;box-shadow:var(--shadow)}.toast.show{display:block}.hamb{display:none}
+
+
+.installShell{min-height:100vh;padding:28px;background:radial-gradient(circle at 80% 5%,rgba(11,110,243,.14),transparent 28%),linear-gradient(180deg,#f8fbff,#eef4fb)}
+.installWrap{max-width:1040px;margin:0 auto}.installTop{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;margin-bottom:20px}.installTop h1{margin:0;font-size:34px}.installGrid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+.setupCard{background:#fff;border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:var(--shadow)}
+.setupStep{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--muted);margin-bottom:16px}.setupStep b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:#fff}
+.themeRow{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.themeChip{width:34px;height:34px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1px var(--line);cursor:pointer}.themeChip.active{box-shadow:0 0 0 3px rgba(11,110,243,.22)}
+.preview{min-height:420px;border-radius:20px;overflow:hidden;background:#f5f8fc;border:1px solid var(--line);box-shadow:var(--shadow-sm)}.previewNav{height:82px;background:linear-gradient(135deg,var(--nav),var(--primary));color:#fff;padding:18px}.previewNav b{display:block;font-size:18px}.previewNav small{opacity:.8}.previewBody{padding:18px}.previewHero{background:linear-gradient(135deg,var(--primary2),var(--primary));color:#fff;border-radius:16px;padding:18px;margin-bottom:12px}.previewCards{display:grid;grid-template-columns:1fr 1fr;gap:9px}.previewCard{background:#fff;border:1px solid var(--line);border-radius:13px;padding:14px}.previewCard strong{font-size:24px;display:block}.installStatus{margin-top:12px}
+.settingsGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.settingsGrid .wide{grid-column:1/-1}.settingsColor{display:flex;gap:10px;align-items:center}.settingsColor input[type=color]{width:54px;height:42px;padding:2px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.footerText{font-size:11px;color:var(--muted);text-align:center;margin-top:18px}
+@media(max-width:760px){.installShell{padding:14px}.installTop h1{font-size:26px}.installGrid{grid-template-columns:1fr}.preview{min-height:320px}.settingsGrid{grid-template-columns:1fr}.settingsGrid .wide{grid-column:auto}}
+
+@media(max-width:1050px){.stats{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:1fr 1fr}.grid3>.card:last-child{grid-column:1/-1}.lower{grid-template-columns:1fr}.search{width:230px}}
+@media(max-width:760px){
+  .sidebar{transform:translateX(-100%);transition:.22s;width:min(84vw,290px)}.sidebar.open{transform:translateX(0)}
+  .main{margin-left:0;width:100%;padding:12px}
+  .topbar{align-items:flex-start;padding:8px 0 10px;margin-bottom:12px;position:sticky;top:0;display:grid;grid-template-columns:1fr auto}
+  .hamb{display:inline-block;margin-bottom:8px}.topbar h1{font-size:22px;line-height:1.15;max-width:230px}.meta{font-size:11px;line-height:1.4;max-width:240px}
+  .search{display:none}.topRight{align-items:flex-start}.topRight .primary{padding:10px 12px;font-size:12px;max-width:130px}
+  .stats{grid-template-columns:1fr 1fr;gap:9px}.stat{padding:14px}.stat strong{font-size:27px}
+  .grid3{grid-template-columns:1fr;gap:10px}.grid3>.card:last-child{grid-column:auto}.hero{min-height:auto;padding:19px}.hero h2{font-size:21px}
+  .card{padding:14px;border-radius:16px}.formGrid{grid-template-columns:1fr}.formGrid .wide{grid-column:auto}
+  .userRow,.auditRow,.bigEvent{grid-template-columns:1fr;gap:10px}.userRow .actions{padding-top:2px}
+  .actions{display:grid;grid-template-columns:1fr 1fr}.actions select{width:100%}.actions .btn{width:100%}
+  .row{flex-direction:column}.authCard{padding:22px 18px;border-radius:22px}.authCard h1{font-size:25px}
+  .monthGrid{gap:3px}.day{min-height:40px;padding:5px}
+}
+</style>
+
+</head>
+<body>
+
+
+<div id="setupScreen" class="installShell hidden">
+  <div class="installWrap">
+    <div class="installTop">
+      <div>
+        <div class="setupStep"><b>1</b> Universal Installer V3.0</div>
+        <h1>Setup Dashboard Calendar</h1>
+        <p class="sub">Isi maklumat organisasi, sambungkan Google Calendar dan pilih warna tema. Tak perlu ubah coding.</p>
+      </div>
+      <div class="logo">⚙️</div>
+    </div>
+
+    <div class="installGrid">
+      <div class="setupCard">
+        <h2>Maklumat Sistem</h2>
+        <div class="field"><label>NAMA SISTEM</label><input id="setupAppName" value="Dashboard Calendar"></div>
+        <div class="field"><label>NAMA ORGANISASI / PEJABAT</label><input id="setupOfficeName" value="" placeholder="Contoh: Hospital / Pejabat / Organisasi"></div>
+        <div class="row">
+          <div class="field"><label>NAMA PENDEK</label><input id="setupShortName" value="" placeholder="Contoh: Unit A / HQ / Cawangan"></div>
+          <div class="field"><label>TIMEZONE</label><select id="setupTimezone"><option value="Asia/Kuala_Lumpur">Asia/Kuala_Lumpur</option><option value="Asia/Singapore">Asia/Singapore</option><option value="Asia/Jakarta">Asia/Jakarta</option><option value="UTC">UTC</option></select></div>
+        </div>
+        <div class="field"><label>EMAIL SUPER ADMIN</label><input id="setupAdminEmail" type="email" value="" placeholder="akaun Google pemilik Apps Script"></div>
+        <div class="field"><label>GOOGLE CALENDAR ID</label><input id="setupCalendarId" value="" placeholder="xxxxx@group.calendar.google.com"></div>
+
+        <div class="field">
+          <label>WARNA TEMA</label>
+          <div class="themeRow">
+            <button type="button" class="themeChip" style="background:#0b6ef3" onclick="pickTheme('#0b6ef3',this)" title="Biru"></button>
+            <button type="button" class="themeChip" style="background:#12875a" onclick="pickTheme('#12875a',this)" title="Hijau"></button>
+            <button type="button" class="themeChip" style="background:#7357d8" onclick="pickTheme('#7357d8',this)" title="Ungu"></button>
+            <button type="button" class="themeChip" style="background:#c43d4b" onclick="pickTheme('#c43d4b',this)" title="Merah"></button>
+            <button type="button" class="themeChip" style="background:#e57b20" onclick="pickTheme('#e57b20',this)" title="Oren"></button>
+            <button type="button" class="themeChip" style="background:#078d95" onclick="pickTheme('#078d95',this)" title="Teal"></button>
+            <input id="setupThemeColor" type="color" value="#0b6ef3" onchange="pickTheme(this.value)">
+          </div>
+        </div>
+
+        <div class="field">
+          <label><input id="setupAllowRegistration" type="checkbox" checked style="width:auto;margin-right:7px"> Benarkan staff daftar sendiri (perlu kelulusan admin)</label>
+        </div>
+        <div class="field"><label>TEKS FOOTER (PILIHAN)</label><input id="setupFooter" placeholder="Contoh: Sistem Dalaman Organisasi"></div>
+
+        <div class="row">
+          <button class="btn secondary" onclick="testSetupUI()">Test Connection</button>
+          <button id="installBtn" class="btn primary" onclick="installSystemUI()">Install System</button>
+        </div>
+        <div id="setupStatus" class="installStatus"></div>
+      </div>
+
+      <div class="setupCard">
+        <h2>Live Preview</h2>
+        <div class="preview">
+          <div class="previewNav"><b id="previewShort">Calendar</b><small id="previewOffice">Organisasi</small></div>
+          <div class="previewBody">
+            <div class="previewHero"><small>AKTIVITI SETERUSNYA</small><h3 id="previewApp" style="margin:10px 0 0">Dashboard Calendar</h3></div>
+            <div class="previewCards"><div class="previewCard"><strong>3</strong><small>Hari Ini</small></div><div class="previewCard"><strong>8</strong><small>Akan Datang</small></div></div>
+            <div class="notice" style="margin-top:12px">Selepas Install, wizard ini tidak akan muncul lagi. Sistem terus masuk ke skrin login OTP.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="authScreen" class="centerShell">
+  <div class="authCard">
+    <div class="logo">🏛️</div>
+    <h1 id="authAppName">Dashboard Calendar</h1>
+    <p id="authOfficeName" class="sub">Sistem aktiviti organisasi.</p>
+
+    <div class="tabs">
+      <button id="loginTab" class="tab active" onclick="switchAuth('login')">Log Masuk</button>
+      <button id="registerTab" class="tab" onclick="switchAuth('register')">Daftar Staff</button>
+    </div>
+
+    <div id="loginPane">
+      <div id="loginStep1">
+        <div class="field"><label>EMAIL</label><input id="loginEmail" type="email" placeholder="nama@email.com"></div>
+        <button class="btn primary full" onclick="requestLoginOtpUI()">Hantar Kod OTP</button>
+      </div>
+      <div id="loginStep2" class="hidden">
+        <div class="notice">Kod OTP telah dihantar ke email anda.</div>
+        <div class="field"><label>KOD OTP</label><input id="loginOtp" class="otpBox" inputmode="numeric" maxlength="6" placeholder="000000"></div>
+        <button class="btn primary full" onclick="verifyLoginOtpUI()">Log Masuk</button>
+        <button class="btn secondary full" style="margin-top:8px" onclick="resetLogin()">Guna email lain</button>
+      </div>
+    </div>
+
+    <div id="registerPane" class="hidden">
+      <div id="regStep1">
+        <div class="field"><label>NAMA PENUH</label><input id="regName"></div>
+        <div class="field"><label>EMAIL</label><input id="regEmail" type="email"></div>
+        <div class="row">
+          <div class="field"><label>JAWATAN</label><input id="regPosition"></div>
+          <div class="field"><label>UNIT / BAHAGIAN</label><input id="regUnit"></div>
+        </div>
+        <button class="btn primary full" onclick="requestRegOtpUI()">Hantar OTP Pendaftaran</button>
+      </div>
+      <div id="regStep2" class="hidden">
+        <div class="notice">Semak email dan masukkan kod OTP 6 digit.</div>
+        <div class="field"><label>KOD OTP</label><input id="regOtp" class="otpBox" inputmode="numeric" maxlength="6" placeholder="000000"></div>
+        <button class="btn primary full" onclick="verifyRegOtpUI()">Sahkan & Hantar Permohonan</button>
+      </div>
+      <div id="regPending" class="hidden">
+        <div class="notice pending"><strong>Permohonan dihantar.</strong><br>Tunggu Super Admin meluluskan akses. Selepas diluluskan, gunakan tab Log Masuk.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="appScreen" class="app hidden">
+  <aside id="sidebar" class="sidebar">
+    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandShortName">Calendar</h2><small id="brandOfficeName">Organisasi</small></div>
+    <nav class="nav">
+      <button class="navbtn active" data-page="dashboardPage">▦ Dashboard</button>
+      <button class="navbtn" data-page="calendarPage">▣ Calendar</button>
+      <button class="navbtn" data-page="todayPage">◫ Hari Ini</button>
+      <button class="navbtn" data-page="upcomingPage">▤ Akan Datang</button>
+      <button id="navAdd" class="navbtn" onclick="openEventForm()">⊕ Tambah Aktiviti</button>
+      <button class="navbtn" data-page="reportPage">▥ Laporan</button>
+      <button id="navUsers" class="navbtn hidden" data-page="usersPage">♙ Permohonan & Staff</button>
+      <button id="navAudit" class="navbtn hidden" data-page="auditPage">☷ Audit Log</button>
+      <button id="navSettings" class="navbtn hidden" data-page="settingsPage">⚙ System Settings</button>
+    </nav>
+    <div class="profile"><b id="profileName"></b><small id="profileEmail"></small><small id="profileRole"></small><button class="btn secondary full" style="margin-top:10px" onclick="logoutUI()">Log Keluar</button><div id="brandFooter" class="footerText" style="color:rgba(255,255,255,.6)"></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><button class="hamb btn secondary" onclick="sidebar.classList.toggle('open')">☰</button><h1 id="topAppName">Dashboard Calendar</h1><div id="topMeta" class="meta"></div></div>
+      <div class="topRight"><input id="searchBox" class="search" placeholder="Cari aktiviti..." onkeydown="if(event.key==='Enter')searchUI()"><button id="topAdd" class="btn primary" onclick="openEventForm()">+ Tambah Aktiviti</button></div>
+    </header>
+
+    <section id="dashboardPage" class="page active"></section>
+    <section id="calendarPage" class="page"></section>
+    <section id="todayPage" class="page"></section>
+    <section id="upcomingPage" class="page"></section>
+    <section id="reportPage" class="page"></section>
+    <section id="usersPage" class="page"></section>
+    <section id="auditPage" class="page"></section>
+    <section id="settingsPage" class="page"></section>
+    <section id="searchPage" class="page"></section>
+  </main>
+</div>
+
+<div id="eventModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHead"><h3 id="eventFormTitle">Tambah Aktiviti</h3><button class="close" onclick="closeModal('eventModal')">×</button></div>
+    <input id="eventId" type="hidden">
+    <div class="formGrid">
+      <div class="field wide"><label>TAJUK</label><input id="eventTitle"></div>
+      <div class="field"><label>MULA</label><input id="eventStart" type="datetime-local"></div>
+      <div class="field"><label>TAMAT</label><input id="eventEnd" type="datetime-local"></div>
+      <div class="field wide"><label>LOKASI</label><input id="eventLocation"></div>
+      <div class="field"><label>KATEGORI</label><select id="eventCategory"><option value="program">Program</option><option value="mesyuarat">Mesyuarat</option><option value="lawatan">Lawatan</option><option value="taklimat">Taklimat</option><option value="deadline">Deadline</option><option value="lain">Lain-lain</option></select></div>
+      <div class="field"><label>REMINDER</label><select id="eventReminder"><option value="0">Tiada</option><option value="30">30 minit</option><option value="60">1 jam</option><option value="180">3 jam</option><option value="1440">1 hari</option></select></div>
+      <div class="field"><label>PIC</label><input id="eventPic"></div>
+      <div class="field"><label>AGENSI</label><input id="eventAgency"></div>
+      <div class="field wide"><label>KETERANGAN</label><textarea id="eventDescription"></textarea></div>
+    </div>
+    <div class="modalActions"><button class="btn secondary" onclick="closeModal('eventModal')">Batal</button><button class="btn primary" onclick="saveEventUI()">Simpan</button></div>
+  </div>
+</div>
+
+<div id="detailModal" class="modal"><div id="detailBox" class="modalBox"></div></div>
+
+<div id="rescheduleModal" class="modal">
+  <div class="modalBox">
+    <div class="modalHead">
+      <div>
+        <h3>Pindah Tarikh</h3>
+        <div id="rescheduleEventName" class="eventSub"></div>
+      </div>
+      <button class="close" onclick="closeModal('rescheduleModal')">×</button>
+    </div>
+
+    <div class="notice">
+      Semua maklumat aktiviti akan kekal. Hanya tarikh dan masa akan berubah.
+    </div>
+
+    <div class="formGrid">
+      <div class="field">
+        <label>TARIKH & MASA MULA BARU</label>
+        <input id="rescheduleStart" type="datetime-local">
+      </div>
+      <div class="field">
+        <label>TARIKH & MASA TAMAT BARU</label>
+        <input id="rescheduleEnd" type="datetime-local">
+      </div>
+    </div>
+
+    <div class="modalActions" style="justify-content:space-between;flex-wrap:wrap">
+      <button class="btn secondary" onclick="duplicateEventUI()">Duplikasi ke Tarikh Baru</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn secondary" onclick="closeModal('rescheduleModal')">Batal</button>
+        <button class="btn primary" onclick="rescheduleEventUI()">Pindah Tarikh</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="dateModal" class="modal"><div id="dateBox" class="modalBox"></div></div>
+<div id="toast" class="toast"></div>
+
+<script>
+let TOKEN=localStorage.getItem('calendar_v3_token')||localStorage.getItem('ppd_v23_token')||'';
+let USER=null,PERMS=null,DATA=null,APP_CONFIG=null;
+let CAL={year:null,month:null,label:'',events:[]};
+let selectedEvent=null;
+let REG_PROFILE=null;
+
+document.addEventListener('DOMContentLoaded',()=>{
+  bindNav();
+  bindSetupPreview();
+  gs('getBootstrapState',[],boot=>{
+    APP_CONFIG=boot.config||{};
+    applyBranding(APP_CONFIG);
+    if(!boot.installed){
+      document.getElementById('setupScreen').classList.remove('hidden');
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('appScreen').classList.add('hidden');
+      return;
+    }
+    document.getElementById('setupScreen').classList.add('hidden');
+    document.getElementById('authScreen').classList.remove('hidden');
+    if(TOKEN) restoreSessionUI();
+  });
+});
+
+function gs(name,args,ok){
+  const r=google.script.run.withSuccessHandler(ok).withFailureHandler(showError);
+  r[name].apply(r,args||[]);
+}
+
+function hexToRgb(hex){
+  hex=String(hex||'#0b6ef3').replace('#','');
+  if(hex.length!==6)return {r:11,g:110,b:243};
+  return {r:parseInt(hex.slice(0,2),16),g:parseInt(hex.slice(2,4),16),b:parseInt(hex.slice(4,6),16)};
+}
+function shadeHex(hex,factor){
+  const c=hexToRgb(hex);
+  const f=v=>Math.max(0,Math.min(255,Math.round(v*factor))).toString(16).padStart(2,'0');
+  return '#'+f(c.r)+f(c.g)+f(c.b);
+}
+function applyBranding(cfg){
+  cfg=cfg||{};
+  const color=cfg.themeColor||'#0b6ef3';
+  document.documentElement.style.setProperty('--primary',color);
+  document.documentElement.style.setProperty('--primary2',shadeHex(color,.78));
+  document.documentElement.style.setProperty('--nav',shadeHex(color,.43));
+  document.documentElement.style.setProperty('--nav2',shadeHex(color,.63));
+  document.title=cfg.appName||'Dashboard Calendar';
+
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v||''};
+  set('authAppName',cfg.appName||'Dashboard Calendar');
+  set('authOfficeName','Sistem aktiviti '+(cfg.officeName||'organisasi')+'.');
+  set('brandShortName',cfg.shortName||'Calendar');
+  set('brandOfficeName',cfg.officeName||'Organisasi');
+  set('topAppName',cfg.appName||'Dashboard Calendar');
+  set('brandFooter',cfg.footerText||'');
+
+  const reg=document.getElementById('registerTab');
+  if(reg)reg.classList.toggle('hidden',cfg.allowRegistration===false);
+}
+
+function bindSetupPreview(){
+  ['setupAppName','setupOfficeName','setupShortName'].forEach(id=>{
+    const e=document.getElementById(id);
+    if(e)e.addEventListener('input',updateSetupPreview);
+  });
+}
+function updateSetupPreview(){
+  const app=document.getElementById('setupAppName');
+  const office=document.getElementById('setupOfficeName');
+  const short=document.getElementById('setupShortName');
+  if(document.getElementById('previewApp'))previewApp.textContent=(app&&app.value.trim())||'Dashboard Calendar';
+  if(document.getElementById('previewOffice'))previewOffice.textContent=(office&&office.value.trim())||'Organisasi';
+  if(document.getElementById('previewShort'))previewShort.textContent=(short&&short.value.trim())||'Calendar';
+}
+function pickTheme(color,el){
+  color=color||'#0b6ef3';
+  const picker=document.getElementById('setupThemeColor');
+  if(picker)picker.value=color;
+  document.querySelectorAll('.themeChip').forEach(x=>x.classList.remove('active'));
+  if(el)el.classList.add('active');
+  applyBranding({themeColor:color,appName:(setupAppName.value||'Dashboard Calendar'),officeName:(setupOfficeName.value||'Organisasi'),shortName:(setupShortName.value||'Calendar'),allowRegistration:true});
+  updateSetupPreview();
+}
+function setupPayload(){
+  return {
+    appName:setupAppName.value.trim(),
+    officeName:setupOfficeName.value.trim(),
+    shortName:setupShortName.value.trim(),
+    timezone:setupTimezone.value,
+    adminEmail:setupAdminEmail.value.trim(),
+    calendarId:setupCalendarId.value.trim(),
+    themeColor:setupThemeColor.value,
+    allowRegistration:setupAllowRegistration.checked,
+    footerText:setupFooter.value.trim()
+  };
+}
+function setupMessage(text,type){
+  const e=document.getElementById('setupStatus');
+  if(!e)return;
+  e.className='installStatus notice'+(type==='error'?' error':'');
+  e.innerHTML=text;
+}
+function testSetupUI(){
+  setupMessage('Sedang menguji sambungan…');
+  gs('testSetupConnection',[setupPayload()],r=>{
+    setupMessage('✅ '+esc(r.message)+'<br>Calendar: <b>'+esc(r.calendarName)+'</b><br>Email owner: '+esc(r.ownerEmail)+(r.mailQuotaAvailable?'<br>Mail OTP: ✅ tersedia':'<br>Mail OTP: ⚠️ kuota tidak tersedia'));
+  });
+}
+function installSystemUI(){
+  if(!confirm('Install sistem dengan tetapan ini?'))return;
+  const b=document.getElementById('installBtn');if(b)b.disabled=true;
+  setupMessage('Sedang memasang sistem…');
+  gs('installSystem',[setupPayload()],r=>{
+    setupMessage('✅ '+esc(r.message)+' Sistem akan dibuka semula.');
+    setTimeout(()=>location.reload(),900);
+  });
+}
+
+function renderSettings(){
+  settingsPage.innerHTML='<h2>System Settings</h2><div class="card"><div id="settingsBox" class="empty">Memuatkan…</div></div>';
+  gs('getSystemSettings',[TOKEN],s=>{
+    settingsBox.innerHTML=`
+      <div class="settingsGrid">
+        <div class="field wide"><label>NAMA SISTEM</label><input id="setAppName" value="${attr(s.appName)}"></div>
+        <div class="field wide"><label>NAMA ORGANISASI / PEJABAT</label><input id="setOfficeName" value="${attr(s.officeName)}"></div>
+        <div class="field"><label>NAMA PENDEK</label><input id="setShortName" value="${attr(s.shortName)}"></div>
+        <div class="field"><label>TIMEZONE</label><input id="setTimezone" value="${attr(s.timezone)}"></div>
+        <div class="field wide"><label>CALENDAR ID</label><input id="setCalendarId" value="${attr(s.calendarId)}"></div>
+        <div class="field wide"><label>SUPER ADMIN</label><input value="${attr(s.adminEmail)}" disabled><div class="eventSub">Email Super Admin dikunci untuk keselamatan installer.</div></div>
+        <div class="field"><label>WARNA TEMA</label><div class="settingsColor"><input id="setThemeColor" type="color" value="${attr(s.themeColor)}"><span>${esc(s.themeColor)}</span></div></div>
+        <div class="field"><label>PENDAFTARAN STAFF</label><select id="setRegistration"><option value="yes" ${s.allowRegistration?'selected':''}>Dibuka + Admin Approval</option><option value="no" ${!s.allowRegistration?'selected':''}>Ditutup</option></select></div>
+        <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
+      </div>
+      <div class="modalActions"><button class="btn primary" onclick="saveSettingsUI()">Simpan Tetapan</button></div>`;
+  });
+}
+function saveSettingsUI(){
+  const p={
+    appName:setAppName.value.trim(),officeName:setOfficeName.value.trim(),shortName:setShortName.value.trim(),
+    timezone:setTimezone.value.trim(),calendarId:setCalendarId.value.trim(),themeColor:setThemeColor.value,
+    allowRegistration:setRegistration.value==='yes',footerText:setFooter.value.trim()
+  };
+  gs('updateSystemSettings',[TOKEN,p],r=>{
+    APP_CONFIG=r.config;applyBranding(APP_CONFIG);toast(r.message);renderSettings();
+  });
+}
+function attr(s=''){return esc(s).replace(/"/g,'&quot;')}
+
+function switchAuth(mode){
+  loginPane.classList.toggle('hidden',mode!=='login');
+  registerPane.classList.toggle('hidden',mode!=='register');
+  loginTab.classList.toggle('active',mode==='login');
+  registerTab.classList.toggle('active',mode==='register');
+}
+
+function requestLoginOtpUI(){
+  const email=loginEmail.value.trim();
+  if(!email)return toast('Masukkan email.');
+  gs('requestLoginOtp',[email],r=>{toast(r.message);loginStep1.classList.add('hidden');loginStep2.classList.remove('hidden')});
+}
+function verifyLoginOtpUI(){
+  gs('verifyLoginOtp',[loginEmail.value.trim(),loginOtp.value.trim()],r=>{
+    TOKEN=r.token;localStorage.setItem('calendar_v3_token',TOKEN);localStorage.removeItem('ppd_v23_token');USER=r.user;toast(r.message);restoreSessionUI()
+  });
+}
+function resetLogin(){loginStep2.classList.add('hidden');loginStep1.classList.remove('hidden');loginOtp.value=''}
+
+function currentRegProfile(){return {name:regName.value.trim(),email:regEmail.value.trim(),position:regPosition.value.trim(),unit:regUnit.value.trim()}}
+function requestRegOtpUI(){
+  REG_PROFILE=currentRegProfile();
+  gs('requestRegistrationOtp',[REG_PROFILE],r=>{toast(r.message);regStep1.classList.add('hidden');regStep2.classList.remove('hidden')});
+}
+function verifyRegOtpUI(){
+  gs('verifyRegistrationOtp',[REG_PROFILE,regOtp.value.trim()],r=>{toast(r.message);regStep2.classList.add('hidden');regPending.classList.remove('hidden')});
+}
+
+function restoreSessionUI(){
+  gs('restoreSession',[TOKEN],r=>{
+    if(!r.valid){localStorage.removeItem('calendar_v3_token');localStorage.removeItem('ppd_v23_token');TOKEN='';return}
+    USER=r.user;PERMS=r.permissions;DATA=r.dashboard;
+    authScreen.classList.add('hidden');appScreen.classList.remove('hidden');
+    CAL={year:DATA.month.year,month:DATA.month.monthIndex,label:DATA.month.label,events:DATA.monthEvents};
+    applyRoleUI();renderAll()
+  });
+}
+
+function applyRoleUI(){
+  profileName.textContent=USER.name;profileEmail.textContent=USER.email;profileRole.textContent=USER.roleLabel;
+  navAdd.classList.toggle('hidden',!PERMS.canCreate);topAdd.classList.toggle('hidden',!PERMS.canCreate);
+  navUsers.classList.toggle('hidden',!PERMS.canManageUsers);navAudit.classList.toggle('hidden',!PERMS.canViewAudit);
+  navSettings.classList.toggle('hidden',!PERMS.canManageUsers);
+}
+function logoutUI(){gs('logout',[TOKEN],()=>{localStorage.removeItem('calendar_v3_token');localStorage.removeItem('ppd_v23_token');location.reload()})}
+
+function renderAll(){
+  topMeta.textContent=DATA.todayLabel+' • '+DATA.calendarName;
+  renderDashboard();renderCalendar();renderToday();renderUpcoming();renderReport();
+  if(PERMS.canManageUsers){renderUsers();renderSettings();}
+  if(PERMS.canViewAudit)renderAudit();
+}
+function renderDashboard(){
+  dashboardPage.innerHTML=`
+    <div class="stats">
+      ${stat('Aktiviti Hari Ini',DATA.stats.today)}
+      ${stat('7 Hari Akan Datang',DATA.stats.upcoming)}
+      ${stat('Aktiviti Bulan Ini',DATA.stats.month)}
+      ${stat('Reminder Aktif',DATA.stats.reminders)}
+    </div>
+    <div class="grid3">
+      ${hero(DATA.nextEvent)}
+      <div class="card" id="dashCalendar"></div>
+      <div class="card"><div class="cardHead"><h3>Quick Actions</h3></div><div class="quick">${PERMS.canCreate?'<button onclick="openEventForm()">➕ Tambah Aktiviti</button>':''}<button onclick="refreshData()">🔄 Refresh</button><button onclick="goToday()">📍 Hari Ini</button>${PERMS.canManageUsers?'<button onclick="window.open(\'https://calendar.google.com\',\'_blank\')">📅 Google Calendar</button>':''}</div></div>
+    </div>
+    <div class="lower">
+      <div class="card"><div class="cardHead"><h3>Hari Ini</h3></div>${eventRows(DATA.todayEvents)}</div>
+      <div class="card"><div class="cardHead"><h3>Akan Datang</h3></div>${eventRows(DATA.upcomingEvents.slice(0,5))}</div>
+      <div class="card"><div class="cardHead"><h3>Reminder</h3></div>${eventRows(DATA.reminders.slice(0,5))}</div>
+    </div>`;
+  renderCal('dashCalendar');
+}
+function stat(label,n){return `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`}
+function hero(e){return e?`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${dateLong(e.start)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button></div>`:`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>Tiada aktiviti akan datang</h2></div>`}
+
+function renderCalendar(){calendarPage.innerHTML='<h2>Calendar Interaktif</h2><div id="fullCalendar" class="card"></div>';renderCal('fullCalendar')}
+function renderCal(id){
+  const el=document.getElementById(id);if(!el)return;
+  const y=CAL.year,m=CAL.month,first=new Date(y,m,1),last=new Date(y,m+1,0),offset=(first.getDay()+6)%7;
+  let cells=['Isn','Sel','Rab','Kha','Jum','Sab','Aha'].map(x=>`<div class="dow">${x}</div>`).join('');
+  for(let i=0;i<offset;i++)cells+='<div class="day blank"></div>';
+  const now=new Date();
+  for(let d=1;d<=last.getDate();d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const es=CAL.events.filter(e=>{const x=new Date(e.start);return x.getFullYear()===y&&x.getMonth()===m&&x.getDate()===d});
+    const today=now.getFullYear()===y&&now.getMonth()===m&&now.getDate()===d;
+    cells+=`<div class="day ${today?'today':''}" onclick="openDate('${ds}')">${d}<div class="dots">${es.slice(0,4).map(e=>`<i class="dot ${e.category}"></i>`).join('')}</div></div>`;
+  }
+  el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid">${cells}</div>`;
+}
+function changeMonth(delta){let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar')})}
+function goToday(){const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar')})}
+function openDate(ds){gs('getEventsForDate',[TOKEN,ds],r=>{dateBox.innerHTML=`<div class="modalHead"><h3>${esc(r.label)}</h3><button class="close" onclick="closeModal('dateModal')">×</button></div>${r.events.length?eventRows(r.events):'<div class="empty">Tiada aktiviti.</div>'}<div class="modalActions">${PERMS.canCreate?`<button class="btn primary" onclick="closeModal('dateModal');openEventForm('${ds}')">+ Tambah Aktiviti</button>`:''}</div>`;dateModal.classList.add('show')})}
+
+function renderToday(){todayPage.innerHTML=`<h2>Aktiviti Hari Ini</h2>${bigList(DATA.todayEvents)}`}
+function renderUpcoming(){upcomingPage.innerHTML=`<h2>Aktiviti Akan Datang</h2>${bigList(DATA.upcomingEvents)}`}
+function renderReport(){reportPage.innerHTML=`<h2>Laporan Ringkas • ${esc(DATA.month.label)}</h2><div class="stats"><div class="stat"><strong>${DATA.report.total}</strong><span>Jumlah Aktiviti</span></div>${DATA.report.rows.slice(0,3).map(x=>`<div class="stat"><strong>${x.count}</strong><span>${esc(x.label)}</span></div>`).join('')}</div>`}
+
+function renderUsers(){
+  usersPage.innerHTML='<h2>Permohonan & Staff</h2><div id="usersList" class="list"><div class="empty">Memuatkan…</div></div>';
+  gs('getAdminUsers',[TOKEN],r=>{
+    usersList.innerHTML=r.users.length?r.users.map(u=>userCard(u)).join(''):'<div class="empty">Belum ada pengguna.</div>'
+  });
+}
+function userCard(u){
+  let actions='';
+  if(u.role!=='admin'){
+    if(u.status==='pending')actions=`<button class="btn primary" onclick="approve('${ea(u.email)}','editor')">Approve Editor</button><button class="btn secondary" onclick="approve('${ea(u.email)}','viewer')">Approve Viewer</button><button class="btn danger" onclick="rejectU('${ea(u.email)}')">Tolak</button>`;
+    else if(u.status==='approved')actions=`<select onchange="changeRole('${ea(u.email)}',this.value)"><option value="">Tukar role…</option><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn danger" onclick="suspendU('${ea(u.email)}')">Suspend</button>`;
+    else if(u.status==='suspended')actions=`<button class="btn primary" onclick="reactivateU('${ea(u.email)}')">Aktifkan Semula</button>`;
+  }
+  return `<div class="userRow"><div><b>${esc(u.name||u.email)}</b><div class="eventSub">${esc(u.email)} • ${esc(u.position||'')} • ${esc(u.unit||'')}</div></div><span class="badge ${u.status==='approved'?(u.role||'viewer'):u.status}">${esc(u.status==='approved'?(u.roleLabel||u.role):u.status)}</span><div class="actions">${actions}</div></div>`;
+}
+function approve(email,role){gs('approveUser',[TOKEN,email,role],r=>{toast(r.message);renderUsers();renderAudit()})}
+function rejectU(email){if(confirm('Tolak permohonan ini?'))gs('rejectUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
+function changeRole(email,role){if(role)gs('changeUserRole',[TOKEN,email,role],r=>{toast(r.message);renderUsers();renderAudit()})}
+function suspendU(email){if(confirm('Gantung akaun ini?'))gs('suspendUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
+function reactivateU(email){gs('reactivateUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
+
+function renderAudit(){
+  auditPage.innerHTML='<h2>Audit Log</h2><div id="auditList" class="list"><div class="empty">Memuatkan…</div></div>';
+  gs('getAuditLog',[TOKEN],r=>{auditList.innerHTML=r.rows.length?r.rows.map(x=>`<div class="auditRow"><div>${dateTime(x.time)}</div><div><b>${esc(x.actor)}</b><div class="eventSub">${esc(x.action)}</div></div><div>${esc(x.detail)}</div></div>`).join(''):'<div class="empty">Belum ada log.</div>'})
+}
+
+function openEventForm(ds){
+  if(!PERMS.canCreate)return;
+  resetEventForm();
+  let s=ds?new Date(ds+'T09:00:00'):new Date();
+  if(!ds)s.setMinutes(Math.ceil(s.getMinutes()/30)*30,0,0);
+  const e=new Date(s.getTime()+3600000);
+  eventStart.value=localInput(s);eventEnd.value=localInput(e);eventModal.classList.add('show')
+}
+function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderMinutes||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';eventModal.classList.add('show')}
+function saveEventUI(){
+  const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderMinutes:eventReminder.value,pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
+  const fn=p.id?'updateCalendarEvent':'createCalendarEvent';
+  gs(fn,[TOKEN,p],r=>{closeModal('eventModal');toast(r.message);refreshData()})
+}
+
+function openReschedule(){
+  if(!PERMS.canEdit || !selectedEvent)return;
+  closeModal('detailModal');
+  rescheduleEventName.textContent=selectedEvent.title;
+  rescheduleStart.value=localInput(new Date(selectedEvent.start));
+  rescheduleEnd.value=localInput(new Date(selectedEvent.end));
+  rescheduleModal.classList.add('show');
+}
+
+function rescheduleEventUI(){
+  if(!PERMS.canEdit || !selectedEvent)return;
+  const payload={
+    id:selectedEvent.id,
+    start:rescheduleStart.value,
+    end:rescheduleEnd.value
+  };
+  gs('rescheduleCalendarEvent',[TOKEN,payload],r=>{
+    closeModal('rescheduleModal');
+    toast(r.message);
+    refreshData();
+  });
+}
+
+function duplicateEventUI(){
+  if(!PERMS.canCreate || !selectedEvent)return;
+  if(!confirm('Buat salinan aktiviti ini pada tarikh dan masa baharu?'))return;
+
+  const payload={
+    id:selectedEvent.id,
+    start:rescheduleStart.value,
+    end:rescheduleEnd.value
+  };
+
+  gs('duplicateCalendarEvent',[TOKEN,payload],r=>{
+    closeModal('rescheduleModal');
+    toast(r.message);
+    refreshData();
+  });
+}
+
+function deleteEventUI(){if(PERMS.canDelete&&confirm('Padam aktiviti ini?'))gs('deleteCalendarEvent',[TOKEN,selectedEvent.id],r=>{closeModal('detailModal');toast(r.message);refreshData()})}
+function resetEventForm(){eventFormTitle.textContent='Tambah Aktiviti';['eventId','eventTitle','eventLocation','eventPic','eventAgency','eventDescription'].forEach(id=>document.getElementById(id).value='');eventCategory.value='program';eventReminder.value='0'}
+function detailById(id){const all=[...DATA.todayEvents,...DATA.upcomingEvents,...DATA.monthEvents,...CAL.events];selectedEvent=all.find(e=>e.id===id);if(selectedEvent)renderDetail()}
+function renderDetail(){const e=selectedEvent;detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete?'<button class="btn danger" onclick="deleteEventUI()">Padam</button>':''}${PERMS.canEdit?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
+
+function eventRows(es){return es.length?es.map(e=>`<div class="eventRow" onclick='detailById(${j(e.id)})'><div>${timeOnly(e.start)}</div><div><div class="eventTitle">${esc(e.title)}</div><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}
+function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateShort(e.start)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}
+
+function searchUI(){const q=searchBox.value.trim();if(!q)return;showPage('searchPage');searchPage.innerHTML='<div class="empty">Mencari…</div>';gs('searchCalendarEvents',[TOKEN,q],r=>{searchPage.innerHTML=`<h2>Carian: ${esc(q)}</h2>${bigList(r)}`})}
+function refreshData(){gs('getDashboardData',[TOKEN],r=>{DATA=r;CAL={year:r.month.year,month:r.month.monthIndex,label:r.month.label,events:r.monthEvents};renderAll();toast('Data dikemaskini.')})}
+
+function bindNav(){document.querySelectorAll('.navbtn[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)))}
+function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.page===id));sidebar.classList.remove('open');if(id==='usersPage')renderUsers();if(id==='auditPage')renderAudit();if(id==='settingsPage')renderSettings()}
+function closeModal(id){document.getElementById(id).classList.remove('show')}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3800)}
+function showError(e){
+  console.error(e);
+  const msg=(e&&e.message?e.message:String(e));
+  toast('Ralat: '+msg);
+  const setup=document.getElementById('setupScreen');
+  if(setup&&!setup.classList.contains('hidden'))setupMessage('❌ '+esc(msg),'error');
+  const b=document.getElementById('installBtn');if(b)b.disabled=false;
+}
+function cleanRichText(s=''){
+  let x=String(s||'');
+  x=x.replace(/<br\s*\/?>/gi,'\n');
+  x=x.replace(/<\/p\s*>/gi,'\n\n');
+  x=x.replace(/<p\b[^>]*>/gi,'');
+  x=x.replace(/<\/div\s*>/gi,'\n');
+  x=x.replace(/<div\b[^>]*>/gi,'');
+  x=x.replace(/<li\b[^>]*>/gi,'• ');
+  x=x.replace(/<\/li\s*>/gi,'\n');
+  x=x.replace(/<[^>]+>/g,'');
+  const ta=document.createElement('textarea');
+  ta.innerHTML=x;
+  x=ta.value;
+  x=x.replace(/\n[ \t]+\n/g,'\n\n').replace(/\n{3,}/g,'\n\n');
+  return x.trim();
+}
+function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function ea(s=''){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+function j(s){return JSON.stringify(String(s))}
+function timeOnly(v){return new Date(v).toLocaleTimeString('ms-MY',{hour:'2-digit',minute:'2-digit'})}
+function timeRange(e){return e.allDay?'Sepanjang hari':timeOnly(e.start)+' – '+timeOnly(e.end)}
+function dateShort(v){return new Date(v).toLocaleDateString('ms-MY',{day:'numeric',month:'short'})}
+function dateLong(v){return new Date(v).toLocaleDateString('ms-MY',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+function dateTime(v){return new Date(v).toLocaleString('ms-MY',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function localInput(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
+</script>
+</body>
+</html>
