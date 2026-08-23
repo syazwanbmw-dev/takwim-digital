@@ -23,7 +23,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 .authCard h1{font-size:30px;line-height:1.1;margin:0 0 8px}.sub{color:var(--muted);line-height:1.55;margin:0}
 .tabs{display:flex;gap:6px;background:#eff4f9;padding:5px;border-radius:13px;margin:22px 0}.tab{flex:1;border:0;background:transparent;padding:11px 12px;border-radius:10px;font-weight:800;color:#566478}.tab.active{background:#fff;color:var(--primary);box-shadow:0 4px 12px rgba(13,50,95,.08)}
 .field{margin:13px 0}.field label{display:block;font-size:11px;font-weight:850;margin-bottom:7px;letter-spacing:.03em}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#9fc4fb;box-shadow:0 0 0 4px rgba(11,110,243,.08)}
-.btn{border:0;padding:12px 16px;border-radius:12px;font-weight:800}.primary{background:linear-gradient(135deg,var(--primary),#0b63da);color:#fff;box-shadow:0 8px 18px rgba(11,110,243,.18)}.secondary{background:#fff;color:var(--text);border:1px solid var(--line)}.danger{background:#ffe9eb;color:#b62f36}.full{width:100%}
+.btn{border:0;padding:12px 16px;border-radius:12px;font-weight:800}.btn:disabled{opacity:.6;cursor:not-allowed}.primary{background:linear-gradient(135deg,var(--primary),#0b63da);color:#fff;box-shadow:0 8px 18px rgba(11,110,243,.18)}.secondary{background:#fff;color:var(--text);border:1px solid var(--line)}.danger{background:#ffe9eb;color:#b62f36}.full{width:100%}
 .row{display:flex;gap:10px}.row>*{flex:1}.notice{padding:13px 14px;border-radius:12px;background:#edf6ff;color:#2f639d;font-size:13px;line-height:1.5;margin:12px 0;border:1px solid #d8e9fb}.pending{background:#fff7df;color:#87610f;border-color:#f0dfad}.error{background:#ffecee;color:#a52f35}.otpBox{font-size:24px;letter-spacing:7px;text-align:center;font-weight:800}
 
 /* APP */
@@ -73,6 +73,13 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
   .actions{display:grid;grid-template-columns:1fr 1fr}.actions select{width:100%}.actions .btn{width:100%}
   .row{flex-direction:column}.authCard{padding:22px 18px;border-radius:22px}.authCard h1{font-size:25px}
   .monthGrid{gap:3px}.day{min-height:40px;padding:5px}
+  /* Modal Tambah Aktiviti (2 btn) + Detail Program (1-4 btn ikut peranan): grid 2-lajur
+     supaya 2 btn jadi 50:50 penuh lebar, 4 btn auto wrap jadi 2x2. Skop sengaja HANYA
+     2 modal ni (bukan .modalActions sejagat) sebab modal Pindah Tarikh ada susun atur
+     custom (nested div) yang akan pecah kalau kena grid ni sekali. */
+  #eventModal .modalActions,#detailModal .modalActions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  #eventModal .modalActions .btn,#detailModal .modalActions .btn{width:100%}
+  #eventModal .modalActions>:last-child:nth-child(odd),#detailModal .modalActions>:last-child:nth-child(odd){grid-column:1/-1}
 }
 </style>
 
@@ -239,7 +246,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
       <div class="field"><label>AGENSI</label><input id="eventAgency"></div>
       <div class="field wide"><label>KETERANGAN</label><textarea id="eventDescription"></textarea></div>
     </div>
-    <div class="modalActions"><button class="btn secondary" onclick="closeModal('eventModal')">Batal</button><button class="btn primary" onclick="saveEventUI()">Simpan</button></div>
+    <div class="modalActions"><button class="btn secondary" onclick="closeModal('eventModal')">Batal</button><button class="btn primary" onclick="saveEventUI(this)">Simpan</button></div>
   </div>
 </div>
 
@@ -274,7 +281,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
       <button class="btn secondary" onclick="duplicateEventUI()">Duplikasi ke Tarikh Baru</button>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn secondary" onclick="closeModal('rescheduleModal')">Batal</button>
-        <button class="btn primary" onclick="rescheduleEventUI()">Pindah Tarikh</button>
+        <button class="btn primary" onclick="rescheduleEventUI(this)">Pindah Tarikh</button>
       </div>
     </div>
   </div>
@@ -308,9 +315,18 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
-function gs(name,args,ok){
-  const r=google.script.run.withSuccessHandler(ok).withFailureHandler(showError);
+function gs(name,args,ok,fail){
+  const r=google.script.run.withSuccessHandler(ok).withFailureHandler(fail||showError);
   r[name].apply(r,args||[]);
+}
+
+// Kunci butang semasa tunggu server (elak double-klik hantar 2 request, cth: program berganda).
+// Pulangkan fungsi unlock -- WAJIB dipanggil dalam success DAN failure handler gs(), kalau tidak
+// button kekal disabled selama-lamanya bila request gagal.
+function lockBtn(btn,busyText){
+  const orig=btn.textContent;
+  btn.disabled=true;btn.textContent=busyText;
+  return ()=>{btn.disabled=false;btn.textContent=orig};
 }
 
 function hexToRgb(hex){
@@ -417,18 +433,19 @@ function renderSettings(){
         <div class="field"><label>PENDAFTARAN STAFF</label><select id="setRegistration"><option value="yes" ${s.allowRegistration?'selected':''}>Dibuka + Admin Approval</option><option value="no" ${!s.allowRegistration?'selected':''}>Ditutup</option></select></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
       </div>
-      <div class="modalActions"><button class="btn primary" onclick="saveSettingsUI()">Simpan Tetapan</button></div>`;
+      <div class="modalActions"><button class="btn primary" onclick="saveSettingsUI(this)">Simpan Tetapan</button></div>`;
   });
 }
-function saveSettingsUI(){
+function saveSettingsUI(btn){
   const p={
     appName:setAppName.value.trim(),officeName:setOfficeName.value.trim(),shortName:setShortName.value.trim(),
     timezone:setTimezone.value.trim(),calendarId:setCalendarId.value.trim(),themeColor:setThemeColor.value,
     allowRegistration:setRegistration.value==='yes',footerText:setFooter.value.trim()
   };
+  const unlock=lockBtn(btn,'Menyimpan…');
   gs('updateSystemSettings',[TOKEN,p],r=>{
-    APP_CONFIG=r.config;applyBranding(APP_CONFIG);toast(r.message);renderSettings();
-  });
+    unlock();APP_CONFIG=r.config;applyBranding(APP_CONFIG);toast(r.message);renderSettings();
+  },e=>{unlock();showError(e)});
 }
 function attr(s=''){return esc(s).replace(/"/g,'&quot;')}
 
@@ -568,10 +585,11 @@ function openEventForm(ds){
   eventStart.value=localInput(s);eventEnd.value=localInput(e);eventModal.classList.add('show')
 }
 function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderMinutes||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';eventModal.classList.add('show')}
-function saveEventUI(){
+function saveEventUI(btn){
   const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderMinutes:eventReminder.value,pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
   const fn=p.id?'updateCalendarEvent':'createCalendarEvent';
-  gs(fn,[TOKEN,p],r=>{closeModal('eventModal');toast(r.message);refreshData()})
+  const unlock=lockBtn(btn,'Menyimpan…');
+  gs(fn,[TOKEN,p],r=>{unlock();closeModal('eventModal');toast(r.message);refreshData()},e=>{unlock();showError(e)})
 }
 
 function openReschedule(){
@@ -583,18 +601,20 @@ function openReschedule(){
   rescheduleModal.classList.add('show');
 }
 
-function rescheduleEventUI(){
+function rescheduleEventUI(btn){
   if(!PERMS.canEdit || !selectedEvent)return;
   const payload={
     id:selectedEvent.id,
     start:rescheduleStart.value,
     end:rescheduleEnd.value
   };
+  const unlock=lockBtn(btn,'Memindah…');
   gs('rescheduleCalendarEvent',[TOKEN,payload],r=>{
+    unlock();
     closeModal('rescheduleModal');
     toast(r.message);
     refreshData();
-  });
+  },e=>{unlock();showError(e)});
 }
 
 function duplicateEventUI(){
@@ -614,7 +634,11 @@ function duplicateEventUI(){
   });
 }
 
-function deleteEventUI(){if(PERMS.canDelete&&confirm('Padam aktiviti ini?'))gs('deleteCalendarEvent',[TOKEN,selectedEvent.id],r=>{closeModal('detailModal');toast(r.message);refreshData()})}
+function deleteEventUI(btn){
+  if(!PERMS.canDelete||!confirm('Padam aktiviti ini?'))return;
+  const unlock=lockBtn(btn,'Memadam…');
+  gs('deleteCalendarEvent',[TOKEN,selectedEvent.id],r=>{unlock();closeModal('detailModal');toast(r.message);refreshData()},e=>{unlock();showError(e)})
+}
 function resetEventForm(){eventFormTitle.textContent='Tambah Aktiviti';['eventId','eventTitle','eventLocation','eventPic','eventAgency','eventDescription'].forEach(id=>document.getElementById(id).value='');eventCategory.value='program';eventReminder.value='0'}
 // Cuti Sekolah (cuti penggal/tambahan KPM) -- Admin sahaja. Tambah pilihan dropdown
 // hanya untuk Admin; backend (assertCutiAdminOnly_) tetap jadi penjaga sebenar.
@@ -624,7 +648,7 @@ function setupCutiOption_(){
   eventCategory.appendChild(opt);
 }
 function detailById(id){const all=[...DATA.todayEvents,...DATA.upcomingEvents,...DATA.monthEvents,...CAL.events];selectedEvent=all.find(e=>e.id===id);if(selectedEvent)renderDetail()}
-function renderDetail(){closeModal('dateModal');const e=selectedEvent;const canManage=!e.isHoliday&&(e.category!=='cuti'||USER.role==='admin');detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete&&canManage?'<button class="btn danger" onclick="deleteEventUI()">Padam</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
+function renderDetail(){closeModal('dateModal');const e=selectedEvent;const canManage=!e.isHoliday&&(e.category!=='cuti'||USER.role==='admin');detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete&&canManage?'<button class="btn danger" onclick="deleteEventUI(this)">Padam</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
 
 function eventRows(es){return es.length?es.map(e=>`<div class="eventRow" onclick='detailById(${j(e.id)})'><div>${timeOnly(e.start)}</div><div><div class="eventTitle">${esc(e.title)}</div><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}
 function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateShort(e.start)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}
