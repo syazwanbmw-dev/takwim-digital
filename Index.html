@@ -29,9 +29,9 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 /* APP */
 .app{display:flex;min-height:100vh}
 .sidebar{width:252px;position:fixed;inset:0 auto 0 0;background:linear-gradient(180deg,#082f69 0%,#052657 100%);color:#fff;padding:18px 14px;display:flex;flex-direction:column;z-index:30;box-shadow:8px 0 26px rgba(8,34,75,.08)}
-.brand{padding:10px 12px 20px;border-bottom:1px solid rgba(255,255,255,.12)}.brand h2{margin:8px 0 2px;font-size:22px}.brand small{opacity:.74;line-height:1.4}
-.nav{padding:18px 0;display:grid;gap:6px;flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}.nav::-webkit-scrollbar{width:6px}.nav::-webkit-scrollbar-track{background:transparent}.nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:99px}.nav::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.42)}.navbtn{border:0;background:transparent;color:#fff;text-align:left;padding:12px 13px;border-radius:12px;font-weight:720;opacity:.88}.navbtn.active,.navbtn:hover{background:linear-gradient(90deg,#0b6ef3,#0a58bf);opacity:1;box-shadow:0 6px 14px rgba(6,42,91,.18)}
-.profile{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding:14px 8px}.profile b,.profile small{display:block}.profile b{font-size:13px}.profile small{opacity:.7;margin-top:3px;font-size:11px}.profile .btn{padding:7px 12px;font-size:12px;font-weight:700}
+.brand{padding:8px 12px 12px;border-bottom:1px solid rgba(255,255,255,.12)}.brand h2{margin:5px 0 1px;font-size:19px}.brand small{opacity:.74;line-height:1.3}
+.nav{padding:10px 0;display:grid;gap:3px}.navbtn{border:0;background:transparent;color:#fff;text-align:left;padding:9px 12px;border-radius:10px;font-weight:720;font-size:13px;opacity:.88}.navbtn.active,.navbtn:hover{background:linear-gradient(90deg,#0b6ef3,#0a58bf);opacity:1;box-shadow:0 6px 14px rgba(6,42,91,.18)}
+.profile{margin-top:auto;border-top:1px solid rgba(255,255,255,.12);padding:9px 8px}.profile b,.profile small{display:block}.profile b{font-size:12px}.profile small{opacity:.7;margin-top:1px;font-size:10px}.profile .btn{padding:6px 12px;font-size:12px;font-weight:700}.profile .footerText{margin-top:4px;font-size:10px}
 .main{margin-left:252px;width:calc(100% - 252px);padding:24px 26px}
 .topbar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;position:sticky;top:0;z-index:20;background:rgba(245,248,252,.92);backdrop-filter:blur(10px);padding:8px 0 12px}
 .topbar h1{margin:0;font-size:30px;letter-spacing:-.02em}.meta{font-size:12px;color:var(--muted);margin-top:6px}.topRight{display:flex;gap:9px;align-items:center}
@@ -203,7 +203,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
       <button id="navAudit" class="navbtn hidden" data-page="auditPage">☷ Audit Log</button>
       <button id="navSettings" class="navbtn hidden" data-page="settingsPage">⚙ System Settings</button>
     </nav>
-    <div class="profile"><b id="profileName"></b><small id="profileEmail"></small><small id="profileRole"></small><button class="btn secondary full" style="margin-top:10px" onclick="logoutUI()">Log Keluar</button><div id="brandFooter" class="footerText" style="color:rgba(255,255,255,.6)"></div></div>
+    <div class="profile"><b id="profileName"></b><small id="profileEmail"></small><small id="profileRole"></small><button class="btn secondary full" style="margin-top:6px" onclick="logoutUI()">Log Keluar</button><div id="brandFooter" class="footerText" style="color:rgba(255,255,255,.6)"></div></div>
   </aside>
 
   <main class="main">
