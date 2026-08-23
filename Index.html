@@ -97,6 +97,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
   .pcell{border:1px solid #999;min-height:80px;padding:4px;font-size:9px}
   .pnum{font-weight:800;font-size:12px;margin-bottom:2px}
   .pevt{line-height:1.3;margin-bottom:1px;overflow-wrap:anywhere}
+  .printPage+.printPage{page-break-before:always}
   @page{size:landscape;margin:12mm}
 }
 </style>
@@ -596,8 +597,13 @@ function renderCalendar(){calendarPage.innerHTML='<h2>Calendar Interaktif</h2><d
 function renderCalMonthList(){
   const box=document.getElementById('calMonthList');
   if(!box)return;
-  const sorted=[...CAL.events].sort((a,b)=>new Date(a.start)-new Date(b.start));
-  box.innerHTML=`<div class="cardHead"><h3>Aktiviti ${esc(CAL.label)}</h3></div>${bigList(sorted)}`;
+  box.innerHTML=monthListHtml(CAL.label,CAL.events);
+}
+// Dikongsi antara senarai bulan tab Calendar (atas) DAN preview tab Laporan (bawah) --
+// elak dua salinan "susun ikut tarikh + papar guna bigList()".
+function monthListHtml(label,events){
+  const sorted=[...events].sort((a,b)=>new Date(a.start)-new Date(b.start));
+  return `<div class="cardHead"><h3>Aktiviti ${esc(label)}</h3></div>${bigList(sorted)}`;
 }
 // Kongsi antara kalendar interaktif (renderCal) DAN kalendar cetak (buildPrintCalendar_) --
 // elak 2 salinan logic bertindih-hari (kelas bug yg pernah menggigit di commit 19740f5).
@@ -629,22 +635,51 @@ function renderReport(){reportPage.innerHTML=`<h2>Laporan Ringkas • ${esc(DATA
     <div class="cardHead"><h3>🖨️ Cetak Kalendar Bulanan</h3></div>
     <p class="eventSub" style="margin-bottom:14px">Untuk guru cetak &amp; bawa ke mesyuarat/rancang program akan datang.</p>
     <div class="row">
-      <div class="field"><label>BULAN</label><select id="printMonth">${MONTH_LONG_MS.map((n,i)=>`<option value="${i}"${i===new Date().getMonth()?' selected':''}>${n}</option>`).join('')}</select></div>
-      <div class="field"><label>TAHUN</label><input id="printYear" type="number" value="${new Date().getFullYear()}"></div>
+      <div class="field"><label>BULAN</label><select id="printMonth" onchange="reportFilterChanged()"><option value="all">Semua Bulan</option>${MONTH_LONG_MS.map((n,i)=>`<option value="${i}"${i===new Date().getMonth()?' selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="field"><label>TAHUN</label><input id="printYear" type="number" value="${new Date().getFullYear()}" onchange="reportFilterChanged()"></div>
     </div>
-    <button class="btn primary" onclick="printCalendarUI()">🖨️ Cetak Kalendar</button>
-  </div>`}
-const MONTH_LONG_MS=['Januari','Februari','Mac','April','Mei','Jun','Julai','Ogos','September','Oktober','November','Disember'];
-// Cetak kalendar bulanan (tab Laporan) -- guru pilih Bulan+Tahun, jana grid kalendar penuh
-// (tajuk pendek program terus dalam kotak hari, bukan sekadar dot) ke #printArea, terus
-// window.print(). Reuse getMonthData() sedia ada (sama API changeMonth/goToday pakai) --
-// tiada endpoint backend baharu diperlukan.
-function printCalendarUI(){
-  const y=parseInt(printYear.value,10),m=parseInt(printMonth.value,10);
-  if(!y||y<1900||m<0||m>11){toast('Sila pilih bulan & tahun yang sah.');return}
-  gs('getMonthData',[TOKEN,y,m],r=>buildPrintCalendar_(r),e=>showError(e));
+    <div id="reportPreview"><div class="empty">Memuatkan…</div></div>
+    <button class="btn primary" style="margin-top:14px" onclick="printCalendarUI()">🖨️ Cetak Kalendar</button>
+  </div>`;
+  reportFilterChanged();
 }
-function buildPrintCalendar_(r){
+const MONTH_LONG_MS=['Januari','Februari','Mac','April','Mei','Jun','Julai','Ogos','September','Oktober','November','Disember'];
+// Cetak kalendar bulanan (tab Laporan). Bulan+Tahun -> fetch -> PREVIEW senarai (reuse
+// monthListHtml()/bigList() sedia ada, KISS/DRY -- sama pattern dgn tab Calendar) -> butang
+// Cetak PALING BAWAH, guna data yg dah difetch (tiada round-trip tambahan bila diklik).
+// "Semua Bulan" guna getYearData() (1 query, bukan 12) -- preview 10/muka (skrin sahaja),
+// cetak tetap SEMUA 12 bulan (12 muka surat landscape) tanpa kira pagination skrin.
+let REPORT_DATA=null,REPORT_PAGE=0;
+function reportFilterChanged(){
+  const y=parseInt(printYear.value,10),mv=printMonth.value;
+  const box=document.getElementById('reportPreview');
+  if(!y||y<1900){if(box)box.innerHTML='<div class="empty">Sila pilih tahun yang sah.</div>';return}
+  if(box)box.innerHTML='<div class="empty">Memuatkan…</div>';
+  REPORT_PAGE=0;
+  if(mv==='all')gs('getYearData',[TOKEN,y],r=>{REPORT_DATA={scope:'year',data:r};renderReportPreview()},e=>showError(e));
+  else gs('getMonthData',[TOKEN,y,parseInt(mv,10)],r=>{REPORT_DATA={scope:'month',data:r};renderReportPreview()},e=>showError(e));
+}
+function renderReportPreview(){
+  const box=document.getElementById('reportPreview');if(!box||!REPORT_DATA)return;
+  if(REPORT_DATA.scope==='month'){box.innerHTML=monthListHtml(REPORT_DATA.data.label,REPORT_DATA.data.events);return}
+  const all=REPORT_DATA.data.allEvents,perPage=10,pages=Math.max(1,Math.ceil(all.length/perPage));
+  REPORT_PAGE=Math.min(REPORT_PAGE,pages-1);
+  const slice=all.slice(REPORT_PAGE*perPage,REPORT_PAGE*perPage+perPage);
+  box.innerHTML=monthListHtml(String(REPORT_DATA.data.year)+' ('+all.length+')',slice)+
+    `<div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:10px">
+      <button class="btn secondary" onclick="reportGoPage_(-1)" ${REPORT_PAGE===0?'disabled':''}>‹ Sebelum</button>
+      <span class="eventSub">Muka ${REPORT_PAGE+1} / ${pages}</span>
+      <button class="btn secondary" onclick="reportGoPage_(1)" ${REPORT_PAGE>=pages-1?'disabled':''}>Seterus ›</button>
+    </div>`;
+}
+function reportGoPage_(delta){REPORT_PAGE+=delta;renderReportPreview()}
+function printCalendarUI(){
+  if(!REPORT_DATA)return;
+  if(REPORT_DATA.scope==='month')printArea.innerHTML=`<div class="printPage">${printMonthHtml_(REPORT_DATA.data)}</div>`;
+  else printArea.innerHTML=REPORT_DATA.data.months.map(m=>`<div class="printPage">${printMonthHtml_(m)}</div>`).join('');
+  setTimeout(()=>window.print(),150); // beri browser render dulu sebelum dialog print terbuka
+}
+function printMonthHtml_(r){
   const y=r.year,m=r.monthIndex,first=new Date(y,m,1),last=new Date(y,m+1,0),offset=(first.getDay()+6)%7;
   let cells=['Isnin','Selasa','Rabu','Khamis','Jumaat','Sabtu','Ahad'].map(x=>`<div class="pdow">${x}</div>`).join('');
   for(let i=0;i<offset;i++)cells+='<div class="pcell"></div>';
@@ -654,8 +689,7 @@ function buildPrintCalendar_(r){
     const evts=es.map(e=>`<div class="pevt">${e.allDay?'':esc(timeOnly(e.start))+' '}${esc(e.title)}</div>`).join('');
     cells+=`<div class="pcell"><div class="pnum">${d}</div>${evts}</div>`;
   }
-  printArea.innerHTML=`<div class="printHead"><h1>${esc((APP_CONFIG&&APP_CONFIG.appName)||'Takwim Digital')}</h1><p>${esc((APP_CONFIG&&APP_CONFIG.officeName)||'')} — Takwim ${esc(r.label)}</p></div><div class="printCal">${cells}</div>`;
-  setTimeout(()=>window.print(),150); // beri browser render dulu sebelum dialog print terbuka
+  return `<div class="printHead"><h1>${esc((APP_CONFIG&&APP_CONFIG.appName)||'Takwim Digital')}</h1><p>${esc((APP_CONFIG&&APP_CONFIG.officeName)||'')} — Takwim ${esc(r.label)}</p></div><div class="printCal">${cells}</div>`;
 }
 
 function renderUsers(){

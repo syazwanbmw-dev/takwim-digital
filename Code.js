@@ -577,6 +577,39 @@ function getMonthData(token, year, monthIndex) {
   };
 }
 
+// Utk cetak "Semua Bulan" (tab Laporan) -- SATU query Calendar utk seluruh tahun, kumpul
+// ikut bulan sendiri (server-side). Elak 12 panggilan getMonthData berasingan (12 round-trip
+// google.script.run yg perlahan); event pelbagai-bulan (cth 30 Jan - 2 Feb) muncul dlm KEDUA
+// bulan (overlap check, sama semantik dgn eventOverlapsDay() client-side).
+function getYearData(token, year) {
+  requireSession_(token, 'canView');
+
+  const y = Number(year);
+  const cal = getPPDCalendar_();
+  const yearStart = new Date(y, 0, 1);
+  const yearEnd = new Date(y + 1, 0, 1);
+  const events = safeGetEvents_(cal, yearStart, yearEnd).map(eventToObject_)
+    .concat(getHolidayEvents_(yearStart, yearEnd))
+    .sort(sortByStart_);
+
+  const months = [];
+  for (let m = 0; m < 12; m++) {
+    const mStart = new Date(y, m, 1);
+    const mEnd = new Date(y, m + 1, 1);
+    months.push({
+      year: y,
+      monthIndex: m,
+      label: formatDate_(mStart, 'MMMM yyyy'),
+      events: events.filter(function(e) {
+        const s = new Date(e.start), en = new Date(e.end);
+        return s < mEnd && en > mStart;
+      })
+    });
+  }
+
+  return { year: y, months: months, allEvents: events };
+}
+
 function getEventsForDate(token, dateStr) {
   requireSession_(token, 'canView');
 
