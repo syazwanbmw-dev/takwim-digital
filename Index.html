@@ -38,7 +38,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 .search{width:320px;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 13px;outline:none;box-shadow:var(--shadow-sm)}
 .page{display:none}.page.active{display:block}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:14px}.stat{background:#fff;border:1px solid var(--line);border-radius:17px;padding:17px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}.stat:after{content:"";position:absolute;width:70px;height:70px;border-radius:50%;right:-22px;top:-22px;background:rgba(11,110,243,.05)}.stat strong{font-size:33px;display:block;line-height:1}.stat span{font-size:12px;color:var(--muted);margin-top:6px;display:block}
-.grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}
+.grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}.heroDots{display:flex;gap:6px;margin-top:18px}.heroDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:0;padding:0}.heroDot.active{background:#fff}
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}.cardHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.cardHead h3{margin:0;font-size:18px}
 .quick{display:grid;gap:9px}.quick button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;text-align:left;font-weight:740}.quick button:hover{background:#f8fbff;border-color:#c8dcfa}
 .calToolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.calToolbar button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-weight:750}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:10px;color:var(--muted);font-weight:850;padding-bottom:3px}.day{min-height:44px;padding:6px;border-radius:10px;text-align:center;cursor:pointer;font-size:12px}.day:hover{background:#edf5ff}.day.holiday{background:#fff4d6}.day.today{background:var(--primary);color:#fff;font-weight:800}.blank{opacity:0;pointer-events:none}.dots{display:flex;justify-content:center;gap:2px;margin-top:4px}.dot{width:5px;height:5px;border-radius:50%}.program{background:#1872e8}.mesyuarat{background:#18a467}.lawatan{background:#f07a24}.taklimat{background:#7d58d8}.deadline{background:#e34b50}.lain{background:#8995a6}.cuti{background:#dba617}
@@ -278,7 +278,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
     </div>
 
     <div class="modalActions" style="justify-content:space-between;flex-wrap:wrap">
-      <button class="btn secondary" onclick="duplicateEventUI()">Duplikasi ke Tarikh Baru</button>
+      <button class="btn secondary" onclick="duplicateEventUI(this)">Duplikasi ke Tarikh Baru</button>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn secondary" onclick="closeModal('rescheduleModal')">Batal</button>
         <button class="btn primary" onclick="rescheduleEventUI(this)">Pindah Tarikh</button>
@@ -511,7 +511,7 @@ function renderDashboard(){
       ${stat('Reminder Aktif',DATA.stats.reminders)}
     </div>
     <div class="grid3">
-      ${hero(DATA.nextEvent)}
+      ${hero(DATA.upcomingEvents)}
       <div class="card" id="dashCalendar"></div>
       <div class="card"><div class="cardHead"><h3>Quick Actions</h3></div><div class="quick">${PERMS.canCreate?'<button onclick="openEventForm()">➕ Tambah Aktiviti</button>':''}<button onclick="refreshData()">🔄 Refresh</button><button onclick="goToday()">📍 Hari Ini</button>${PERMS.canManageUsers?'<button onclick="window.open(\'https://calendar.google.com\',\'_blank\')">📅 Google Calendar</button>':''}</div></div>
     </div>
@@ -521,9 +521,34 @@ function renderDashboard(){
       <div class="card"><div class="cardHead"><h3>Reminder</h3></div>${eventRows(DATA.reminders.slice(0,5))}</div>
     </div>`;
   renderCal('dashCalendar');
+  heroInit(DATA.upcomingEvents);
 }
 function stat(label,n){return `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`}
-function hero(e){return e?`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${dateLong(e.start)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button></div>`:`<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>Tiada aktiviti akan datang</h2></div>`}
+// Card "Aktiviti Seterusnya" -- dulu papar 1 aktiviti sahaja (nextEvent). Sekarang terima
+// SENARAI (DATA.upcomingEvents, 7 hari akan datang, data sama yg dipakai card "Akan Datang")
+// dan auto-slide setiap 5 saat + dots boleh klik terus ke satu-satu. hero() bina skeleton
+// sahaja -- kandungan slaid pertama diisi heroInit() lepas skeleton tu sebenar dlm DOM.
+let HERO_EVENTS=[],HERO_IDX=0,HERO_TIMER=null;
+function hero(events){
+  if(!events||!events.length)return `<div class="hero"><small>AKTIVITI SETERUSNYA</small><h2>Tiada aktiviti akan datang</h2></div>`;
+  const dots=events.length>1?`<div id="heroDots" class="heroDots"></div>`:'';
+  return `<div class="hero"><small>AKTIVITI SETERUSNYA${events.length>1?' ('+events.length+')':''}</small><div id="heroBody"></div>${dots}</div>`;
+}
+function heroInit(events){
+  HERO_EVENTS=events||[];HERO_IDX=0;
+  if(HERO_TIMER){clearInterval(HERO_TIMER);HERO_TIMER=null}
+  if(!HERO_EVENTS.length)return;
+  heroRender();
+  if(HERO_EVENTS.length>1)HERO_TIMER=setInterval(()=>heroGoTo((HERO_IDX+1)%HERO_EVENTS.length),5000);
+}
+function heroGoTo(i){HERO_IDX=i;heroRender()}
+function heroRender(){
+  const e=HERO_EVENTS[HERO_IDX];if(!e)return;
+  const body=document.getElementById('heroBody');
+  if(body)body.innerHTML=`<h2>${esc(e.title)}</h2><div class="heroMeta"><div>📅 ${dateLong(e.start)}</div><div>🕐 ${timeRange(e)}</div>${e.location?`<div>📍 ${esc(e.location)}</div>`:''}</div><button class="btn secondary" style="margin-top:22px" onclick='detailById(${j(e.id)})'>Lihat Butiran</button>`;
+  const dots=document.getElementById('heroDots');
+  if(dots)dots.innerHTML=HERO_EVENTS.map((_,i)=>`<span class="heroDot${i===HERO_IDX?' active':''}" onclick="heroGoTo(${i})"></span>`).join('');
+}
 
 function renderCalendar(){calendarPage.innerHTML='<h2>Calendar Interaktif</h2><div id="fullCalendar" class="card"></div><div id="calMonthList" class="card" style="margin-top:14px"></div>';renderCal('fullCalendar');renderCalMonthList()}
 // Senarai semua aktiviti bulan yang ditunjuk kalendar -- guna CAL.events sedia ada
@@ -567,17 +592,17 @@ function renderUsers(){
 function userCard(u){
   let actions='';
   if(u.role!=='admin'){
-    if(u.status==='pending')actions=`<button class="btn primary" onclick="approve('${ea(u.email)}','editor')">Approve Editor</button><button class="btn secondary" onclick="approve('${ea(u.email)}','viewer')">Approve Viewer</button><button class="btn danger" onclick="rejectU('${ea(u.email)}')">Tolak</button>`;
-    else if(u.status==='approved')actions=`<select onchange="changeRole('${ea(u.email)}',this.value)"><option value="">Tukar role…</option><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn danger" onclick="suspendU('${ea(u.email)}')">Suspend</button>`;
-    else if(u.status==='suspended')actions=`<button class="btn primary" onclick="reactivateU('${ea(u.email)}')">Aktifkan Semula</button>`;
+    if(u.status==='pending')actions=`<button class="btn primary" onclick="approve(this,'${ea(u.email)}','editor')">Approve Editor</button><button class="btn secondary" onclick="approve(this,'${ea(u.email)}','viewer')">Approve Viewer</button><button class="btn danger" onclick="rejectU(this,'${ea(u.email)}')">Tolak</button>`;
+    else if(u.status==='approved')actions=`<select onchange="changeRole('${ea(u.email)}',this.value)"><option value="">Tukar role…</option><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn danger" onclick="suspendU(this,'${ea(u.email)}')">Suspend</button>`;
+    else if(u.status==='suspended')actions=`<button class="btn primary" onclick="reactivateU(this,'${ea(u.email)}')">Aktifkan Semula</button>`;
   }
   return `<div class="userRow"><div><b>${esc(u.name||u.email)}</b><div class="eventSub">${esc(u.email)} • ${esc(u.position||'')} • ${esc(u.unit||'')}</div></div><span class="badge ${u.status==='approved'?(u.role||'viewer'):u.status}">${esc(u.status==='approved'?(u.roleLabel||u.role):u.status)}</span><div class="actions">${actions}</div></div>`;
 }
-function approve(email,role){gs('approveUser',[TOKEN,email,role],r=>{toast(r.message);renderUsers();renderAudit()})}
-function rejectU(email){if(confirm('Tolak permohonan ini?'))gs('rejectUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
+function approve(btn,email,role){const unlock=lockBtn(btn,'Memproses…');gs('approveUser',[TOKEN,email,role],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
+function rejectU(btn,email){if(!confirm('Tolak permohonan ini?'))return;const unlock=lockBtn(btn,'Memproses…');gs('rejectUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
 function changeRole(email,role){if(role)gs('changeUserRole',[TOKEN,email,role],r=>{toast(r.message);renderUsers();renderAudit()})}
-function suspendU(email){if(confirm('Gantung akaun ini?'))gs('suspendUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
-function reactivateU(email){gs('reactivateUser',[TOKEN,email],r=>{toast(r.message);renderUsers();renderAudit()})}
+function suspendU(btn,email){if(!confirm('Gantung akaun ini?'))return;const unlock=lockBtn(btn,'Memproses…');gs('suspendUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
+function reactivateU(btn,email){const unlock=lockBtn(btn,'Memproses…');gs('reactivateUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
 
 function renderAudit(){
   auditPage.innerHTML='<h2>Audit Log</h2><div id="auditList" class="list"><div class="empty">Memuatkan…</div></div>';
@@ -625,7 +650,7 @@ function rescheduleEventUI(btn){
   },e=>{unlock();showError(e)});
 }
 
-function duplicateEventUI(){
+function duplicateEventUI(btn){
   if(!PERMS.canCreate || !selectedEvent)return;
   if(!confirm('Buat salinan aktiviti ini pada tarikh dan masa baharu?'))return;
 
@@ -635,11 +660,13 @@ function duplicateEventUI(){
     end:rescheduleEnd.value
   };
 
+  const unlock=lockBtn(btn,'Menyalin…');
   gs('duplicateCalendarEvent',[TOKEN,payload],r=>{
+    unlock();
     closeModal('rescheduleModal');
     toast(r.message);
     refreshData();
-  });
+  },e=>{unlock();showError(e)});
 }
 
 function deleteEventUI(btn){
@@ -708,7 +735,7 @@ function dateRangeShort(e){
   return sameDay?dateShort(e.start):dateShort(e.start)+' – '+dateShort(e.end);
 }
 function dateLong(v){return new Date(v).toLocaleDateString('ms-MY',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-function dateTime(v){return new Date(v).toLocaleString('ms-MY',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+function dateTime(v){const d=new Date(v),p=n=>String(n).padStart(2,'0');return dateShort(v)+' '+d.getFullYear()+', '+p(d.getHours())+':'+p(d.getMinutes())}
 function localInput(d){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
 </script>
 </body>
