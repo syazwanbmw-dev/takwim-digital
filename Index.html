@@ -81,6 +81,24 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
   #eventModal .modalActions .btn,#detailModal .modalActions .btn{width:100%}
   #eventModal .modalActions>:last-child:nth-child(odd),#detailModal .modalActions>:last-child:nth-child(odd){grid-column:1/-1}
 }
+
+/* Cetak kalendar bulanan (tab Laporan) -- #printArea kosong+hidden di skrin, diisi lepas
+   guru pilih bulan/tahun. @media print sorok SEMUA elemen top-level lain (sidebar, topbar,
+   modal dll) supaya kertas cetak cuma papar kalendar, bukan seluruh app. */
+.printArea{display:none}
+@media print{
+  body>div:not(#printArea){display:none!important}
+  #printArea{display:block!important}
+  .printHead{text-align:center;margin-bottom:14px}
+  .printHead h1{margin:0;font-size:20px}
+  .printHead p{margin:4px 0 0;font-size:12px;color:#555}
+  .printCal{display:grid;grid-template-columns:repeat(7,1fr)}
+  .pdow{background:#eee;text-align:center;font-weight:800;padding:6px 0;border:1px solid #999;font-size:11px}
+  .pcell{border:1px solid #999;min-height:80px;padding:4px;font-size:9px}
+  .pnum{font-weight:800;font-size:12px;margin-bottom:2px}
+  .pevt{line-height:1.3;margin-bottom:1px;overflow-wrap:anywhere}
+  @page{size:landscape;margin:12mm}
+}
 </style>
 
 </head>
@@ -289,6 +307,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 
 <div id="dateModal" class="modal"><div id="dateBox" class="modalBox"></div></div>
 <div id="toast" class="toast"></div>
+<div id="printArea" class="printArea"></div>
 
 <script>
 let TOKEN=localStorage.getItem('calendar_v3_token')||localStorage.getItem('ppd_v23_token')||'';
@@ -580,6 +599,9 @@ function renderCalMonthList(){
   const sorted=[...CAL.events].sort((a,b)=>new Date(a.start)-new Date(b.start));
   box.innerHTML=`<div class="cardHead"><h3>Aktiviti ${esc(CAL.label)}</h3></div>${bigList(sorted)}`;
 }
+// Kongsi antara kalendar interaktif (renderCal) DAN kalendar cetak (buildPrintCalendar_) --
+// elak 2 salinan logic bertindih-hari (kelas bug yg pernah menggigit di commit 19740f5).
+function eventOverlapsDay(e,cellStart,cellEnd){const s=new Date(e.start),en=new Date(e.end);return s<=cellEnd&&en>cellStart}
 function renderCal(id){
   const el=document.getElementById(id);if(!el)return;
   const y=CAL.year,m=CAL.month,first=new Date(y,m,1),last=new Date(y,m+1,0),offset=(first.getDay()+6)%7;
@@ -589,7 +611,7 @@ function renderCal(id){
   for(let d=1;d<=last.getDate();d++){
     const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const cellStart=new Date(y,m,d,0,0,0,0),cellEnd=new Date(y,m,d,23,59,59,999);
-    const es=CAL.events.filter(e=>{const s=new Date(e.start),en=new Date(e.end);return s<=cellEnd&&en>cellStart});
+    const es=CAL.events.filter(e=>eventOverlapsDay(e,cellStart,cellEnd));
     const today=now.getFullYear()===y&&now.getMonth()===m&&now.getDate()===d;
     const holiday=es.some(e=>e.isHoliday);
     cells+=`<div class="day ${holiday?'holiday':''} ${today?'today':''}" onclick="openDate('${ds}')">${d}<div class="dots">${es.slice(0,4).map(e=>`<i class="dot ${e.category}"></i>`).join('')}</div></div>`;
@@ -602,7 +624,39 @@ function openDate(ds){gs('getEventsForDate',[TOKEN,ds],r=>{dateBox.innerHTML=`<d
 
 function renderToday(){todayPage.innerHTML=`<h2>Aktiviti Hari Ini</h2>${bigList(DATA.todayEvents)}`}
 function renderUpcoming(){upcomingPage.innerHTML=`<h2>Aktiviti Akan Datang</h2>${bigList(DATA.upcomingEvents)}`}
-function renderReport(){reportPage.innerHTML=`<h2>Laporan Ringkas • ${esc(DATA.month.label)}</h2><div class="stats"><div class="stat"><strong>${DATA.report.total}</strong><span>Jumlah Aktiviti</span></div>${DATA.report.rows.slice(0,3).map(x=>`<div class="stat"><strong>${x.count}</strong><span>${esc(x.label)}</span></div>`).join('')}</div>`}
+function renderReport(){reportPage.innerHTML=`<h2>Laporan Ringkas • ${esc(DATA.month.label)}</h2><div class="stats"><div class="stat"><strong>${DATA.report.total}</strong><span>Jumlah Aktiviti</span></div>${DATA.report.rows.slice(0,3).map(x=>`<div class="stat"><strong>${x.count}</strong><span>${esc(x.label)}</span></div>`).join('')}</div>
+  <div class="card" style="margin-top:14px">
+    <div class="cardHead"><h3>🖨️ Cetak Kalendar Bulanan</h3></div>
+    <p class="eventSub" style="margin-bottom:14px">Untuk guru cetak &amp; bawa ke mesyuarat/rancang program akan datang.</p>
+    <div class="row">
+      <div class="field"><label>BULAN</label><select id="printMonth">${MONTH_LONG_MS.map((n,i)=>`<option value="${i}"${i===new Date().getMonth()?' selected':''}>${n}</option>`).join('')}</select></div>
+      <div class="field"><label>TAHUN</label><input id="printYear" type="number" value="${new Date().getFullYear()}"></div>
+    </div>
+    <button class="btn primary" onclick="printCalendarUI()">🖨️ Cetak Kalendar</button>
+  </div>`}
+const MONTH_LONG_MS=['Januari','Februari','Mac','April','Mei','Jun','Julai','Ogos','September','Oktober','November','Disember'];
+// Cetak kalendar bulanan (tab Laporan) -- guru pilih Bulan+Tahun, jana grid kalendar penuh
+// (tajuk pendek program terus dalam kotak hari, bukan sekadar dot) ke #printArea, terus
+// window.print(). Reuse getMonthData() sedia ada (sama API changeMonth/goToday pakai) --
+// tiada endpoint backend baharu diperlukan.
+function printCalendarUI(){
+  const y=parseInt(printYear.value,10),m=parseInt(printMonth.value,10);
+  if(!y||y<1900||m<0||m>11){toast('Sila pilih bulan & tahun yang sah.');return}
+  gs('getMonthData',[TOKEN,y,m],r=>buildPrintCalendar_(r),e=>showError(e));
+}
+function buildPrintCalendar_(r){
+  const y=r.year,m=r.monthIndex,first=new Date(y,m,1),last=new Date(y,m+1,0),offset=(first.getDay()+6)%7;
+  let cells=['Isnin','Selasa','Rabu','Khamis','Jumaat','Sabtu','Ahad'].map(x=>`<div class="pdow">${x}</div>`).join('');
+  for(let i=0;i<offset;i++)cells+='<div class="pcell"></div>';
+  for(let d=1;d<=last.getDate();d++){
+    const cellStart=new Date(y,m,d,0,0,0,0),cellEnd=new Date(y,m,d,23,59,59,999);
+    const es=r.events.filter(e=>eventOverlapsDay(e,cellStart,cellEnd)).sort((a,b)=>new Date(a.start)-new Date(b.start));
+    const evts=es.map(e=>`<div class="pevt">${e.allDay?'':esc(timeOnly(e.start))+' '}${esc(e.title)}</div>`).join('');
+    cells+=`<div class="pcell"><div class="pnum">${d}</div>${evts}</div>`;
+  }
+  printArea.innerHTML=`<div class="printHead"><h1>${esc((APP_CONFIG&&APP_CONFIG.appName)||'Takwim Digital')}</h1><p>${esc((APP_CONFIG&&APP_CONFIG.officeName)||'')} — Takwim ${esc(r.label)}</p></div><div class="printCal">${cells}</div>`;
+  setTimeout(()=>window.print(),150); // beri browser render dulu sebelum dialog print terbuka
+}
 
 function renderUsers(){
   usersPage.innerHTML='<h2>Permohonan & Staff</h2><div id="usersList" class="list"><div class="empty">Memuatkan…</div></div>';
