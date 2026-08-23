@@ -464,6 +464,7 @@ function restoreSessionUI(){
   gs('restoreSession',[TOKEN],r=>{
     if(!r.valid){localStorage.removeItem('calendar_v3_token');localStorage.removeItem('ppd_v23_token');TOKEN='';return}
     USER=r.user;PERMS=r.permissions;DATA=r.dashboard;
+    setupCutiOption_();
     authScreen.classList.add('hidden');appScreen.classList.remove('hidden');
     CAL={year:DATA.month.year,month:DATA.month.monthIndex,label:DATA.month.label,events:DATA.monthEvents};
     applyRoleUI();renderAll()
@@ -615,8 +616,15 @@ function duplicateEventUI(){
 
 function deleteEventUI(){if(PERMS.canDelete&&confirm('Padam aktiviti ini?'))gs('deleteCalendarEvent',[TOKEN,selectedEvent.id],r=>{closeModal('detailModal');toast(r.message);refreshData()})}
 function resetEventForm(){eventFormTitle.textContent='Tambah Aktiviti';['eventId','eventTitle','eventLocation','eventPic','eventAgency','eventDescription'].forEach(id=>document.getElementById(id).value='');eventCategory.value='program';eventReminder.value='0'}
+// Cuti Sekolah (cuti penggal/tambahan KPM) -- Admin sahaja. Tambah pilihan dropdown
+// hanya untuk Admin; backend (assertCutiAdminOnly_) tetap jadi penjaga sebenar.
+function setupCutiOption_(){
+  if(!USER||USER.role!=='admin'||eventCategory.querySelector('option[value="cuti"]'))return;
+  const opt=document.createElement('option');opt.value='cuti';opt.textContent='🎉 Cuti Sekolah';
+  eventCategory.appendChild(opt);
+}
 function detailById(id){const all=[...DATA.todayEvents,...DATA.upcomingEvents,...DATA.monthEvents,...CAL.events];selectedEvent=all.find(e=>e.id===id);if(selectedEvent)renderDetail()}
-function renderDetail(){closeModal('dateModal');const e=selectedEvent;detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete&&!e.isHoliday?'<button class="btn danger" onclick="deleteEventUI()">Padam</button>':''}${PERMS.canEdit&&!e.isHoliday?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit&&!e.isHoliday?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
+function renderDetail(){closeModal('dateModal');const e=selectedEvent;const canManage=!e.isHoliday&&(e.category!=='cuti'||USER.role==='admin');detailBox.innerHTML=`<div class="modalHead"><h3>${esc(e.title)}</h3><button class="close" onclick="closeModal('detailModal')">×</button></div><div class="notice"><b>${dateLong(e.start)}</b><br>${timeRange(e)}${e.location?'<br>📍 '+esc(e.location):''}</div><div style="white-space:pre-wrap;line-height:1.55;margin:14px 0">${esc(cleanRichText(e.description||''))}</div><div class="modalActions">${PERMS.canDelete&&canManage?'<button class="btn danger" onclick="deleteEventUI()">Padam</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="openReschedule()">Pindah Tarikh</button>':''}${PERMS.canEdit&&canManage?'<button class="btn secondary" onclick="editEvent()">Edit</button>':''}<button class="btn primary" onclick="closeModal(\'detailModal\')">Tutup</button></div>`;detailModal.classList.add('show')}
 
 function eventRows(es){return es.length?es.map(e=>`<div class="eventRow" onclick='detailById(${j(e.id)})'><div>${timeOnly(e.start)}</div><div><div class="eventTitle">${esc(e.title)}</div><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}
 function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateShort(e.start)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}

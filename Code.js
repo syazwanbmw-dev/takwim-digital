@@ -596,6 +596,7 @@ function createCalendarEvent(token, payload) {
 
   const cal = getPPDCalendar_();
   const category = CATEGORY_CONFIG[payload.category] ? payload.category : 'lain';
+  assertCutiAdminOnly_(session, category);
 
   const event = cal.createEvent(
     String(payload.title).trim(),
@@ -623,8 +624,12 @@ function updateCalendarEvent(token, payload) {
   const event = findEventByIdInCalendar_(cal, payload.id);
   if (!event) throw new Error('Aktiviti tidak ditemui.');
 
+  const existingCategory = getCategory_(event, event.getDescription() || '');
+  assertCutiAdminOnly_(session, existingCategory);
+
   const oldTitle = event.getTitle();
   const category = CATEGORY_CONFIG[payload.category] ? payload.category : 'lain';
+  assertCutiAdminOnly_(session, category);
 
   event.setTitle(String(payload.title).trim());
   event.setTime(new Date(payload.start), new Date(payload.end));
@@ -657,6 +662,7 @@ function rescheduleCalendarEvent(token, payload) {
   const cal = getPPDCalendar_();
   const event = findEventByIdInCalendar_(cal, payload.id);
   if (!event) throw new Error('Aktiviti tidak ditemui.');
+  assertCutiAdminOnly_(session, getCategory_(event, event.getDescription() || ''));
 
   const oldStart = event.getStartTime();
   event.setTime(start, end);
@@ -736,6 +742,7 @@ function deleteCalendarEvent(token, eventId) {
   const cal = getPPDCalendar_();
   const event = findEventByIdInCalendar_(cal, eventId);
   if (!event) throw new Error('Aktiviti tidak ditemui.');
+  assertCutiAdminOnly_(session, getCategory_(event, event.getDescription() || ''));
 
   const title = event.getTitle();
   event.deleteEvent();
@@ -905,6 +912,15 @@ function requireSession_(token, permission) {
     user: publicUser_(user),
     permissions: permissions
   };
+}
+
+// Kategori 'cuti' (cuti penggal/tambahan KPM) -- Admin sahaja boleh cipta/ubah/padam.
+// Disemak SERVER-SIDE (bukan sekadar sorok butang UI) sebab google.script.run boleh
+// dipanggil terus dari console pelayar, memintas apa-apa sekatan client-side.
+function assertCutiAdminOnly_(session, category) {
+  if (category === 'cuti' && session.user.role !== 'admin') {
+    throw new Error('Cuti Sekolah hanya boleh diuruskan oleh Admin.');
+  }
 }
 
 function revokeSession_(token) {
@@ -1202,7 +1218,9 @@ function validateEventPayload_(payload) {
 
 function buildReport_(events) {
   // Cuti/perayaan dikecualikan -- laporan ni track aktiviti kerja sekolah sahaja.
-  const workEvents = events.filter(function(e) { return !e.isHoliday; });
+  // Semak kategori (bukan cuma isHoliday) supaya cuti penggal/tambahan KPM yang
+  // direkod terus dlm sistem (bukan dari Google) turut dikecualikan.
+  const workEvents = events.filter(function(e) { return e.category !== 'cuti'; });
   const counts = { program:0, mesyuarat:0, lawatan:0, taklimat:0, deadline:0, lain:0 };
   workEvents.forEach(function(e) {
     if (counts[e.category] !== undefined) counts[e.category]++;
