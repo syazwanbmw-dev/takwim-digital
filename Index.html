@@ -217,7 +217,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 
 <div id="appScreen" class="app hidden">
   <aside id="sidebar" class="sidebar">
-    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandShortName"><?= shortName ?></h2><small id="brandOfficeName"><?= officeName ?></small></div>
+    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandAppName"><?= appName ?></h2><small id="brandOfficeName"><?= officeName ?></small></div>
     <nav class="nav">
       <button class="navbtn active" data-page="dashboardPage">▦ Dashboard</button>
       <button class="navbtn" data-page="calendarPage">▣ Calendar</button>
@@ -371,7 +371,7 @@ function applyBranding(cfg){
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v||''};
   set('authAppName',cfg.appName||'Dashboard Calendar');
   set('authOfficeName','Takwim '+(cfg.officeName||'organisasi')+'.');
-  set('brandShortName',cfg.shortName||'Calendar');
+  set('brandAppName',cfg.appName||'Dashboard Calendar');
   set('brandOfficeName',cfg.officeName||'Organisasi');
   set('topAppName',cfg.appName||'Dashboard Calendar');
   set('brandFooter',cfg.footerText||'');
