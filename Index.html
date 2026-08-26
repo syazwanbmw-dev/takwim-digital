@@ -619,7 +619,7 @@ function renderCal(id){
     const cellStart=new Date(y,m,d,0,0,0,0),cellEnd=new Date(y,m,d,23,59,59,999);
     const es=CAL.events.filter(e=>eventOverlapsDay(e,cellStart,cellEnd));
     const today=now.getFullYear()===y&&now.getMonth()===m&&now.getDate()===d;
-    const holiday=es.some(e=>e.isHoliday);
+    const holiday=es.some(e=>e.isHoliday||e.category==='cuti');
     cells+=`<div class="day ${holiday?'holiday':''} ${today?'today':''}" onclick="openDate('${ds}')">${d}<div class="dots">${es.slice(0,4).map(e=>`<i class="dot ${e.category}"></i>`).join('')}</div></div>`;
   }
   el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid">${cells}</div>`;
