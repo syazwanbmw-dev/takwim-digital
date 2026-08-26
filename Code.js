@@ -14,6 +14,7 @@ const DEFAULT_CONFIG = {
   OTP_MAX_ATTEMPTS: 5,
   OTP_RESEND_SECONDS: 60,
   SESSION_DAYS: 7,
+  SESSION_ABSOLUTE_DAYS: 30,
   MAX_AUDIT_ROWS: 400
 };
 
@@ -933,10 +934,27 @@ function requireSession_(token, permission) {
   const s = sessions[key];
 
   if (!s) throw new Error('Sesi tidak sah. Sila login semula.');
-  if (Date.now() > s.expiresAt) {
+
+  const now = Date.now();
+  const cfg = getConfig_();
+  // Had MUTLAK dari masa LOGIN (createdAt) -- ni yg bezakan sliding tulen (tak pernah tamat
+  // selagi aktif, risiko token dicuri/PC dikongsi tak pernah automatik tamat) drpd hybrid ni.
+  const hardLimit = new Date(s.createdAt).getTime() + cfg.SESSION_ABSOLUTE_DAYS * 24 * 60 * 60 * 1000;
+
+  if (now > s.expiresAt || now > hardLimit) {
     delete sessions[key];
     saveSessions_(sessions);
     throw new Error('Sesi telah tamat. Sila login semula.');
+  }
+
+  // Sliding: lanjutkan tempoh SESSION_DAYS dari SEKARANG setiap kali aktif, tapi jangan lepas
+  // had mutlak. Tulis PropertiesService cuma bila lanjutan >1 jam -- elak rewrite blob sesi
+  // (SEMUA guru dlm satu property) pada SETIAP panggilan API, yg boleh cecah had kuota GAS.
+  const slidingExpiry = Math.min(now + cfg.SESSION_DAYS * 24 * 60 * 60 * 1000, hardLimit);
+  if (slidingExpiry - s.expiresAt > 60 * 60 * 1000) {
+    s.expiresAt = slidingExpiry;
+    sessions[key] = s;
+    saveSessions_(sessions);
   }
 
   const users = getUsers_();
