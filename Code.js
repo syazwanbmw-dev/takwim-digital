@@ -10,9 +10,6 @@ const DEFAULT_CONFIG = {
   THEME_COLOR: '#0b6ef3',
   ALLOW_REGISTRATION: true,
   FOOTER_TEXT: '',
-  OTP_EXPIRY_MINUTES: 10,
-  OTP_MAX_ATTEMPTS: 5,
-  OTP_RESEND_SECONDS: 60,
   SESSION_DAYS: 7,
   SESSION_ABSOLUTE_DAYS: 30,
   MAX_AUDIT_ROWS: 400
@@ -230,7 +227,6 @@ function getPublicConfig() {
     appName: cfg.APP_NAME,
     officeName: cfg.OFFICE_NAME,
     shortName: cfg.SHORT_NAME,
-    otpExpiryMinutes: cfg.OTP_EXPIRY_MINUTES,
     themeColor: cfg.THEME_COLOR,
     allowRegistration: cfg.ALLOW_REGISTRATION,
     footerText: cfg.FOOTER_TEXT
@@ -238,55 +234,51 @@ function getPublicConfig() {
 }
 
 /**
- * Registration Step 1:
- * validates profile and emails an OTP.
+ * Sumber kebenaran TUNGGAL untuk identiti guru: sesi Google domain (access:DOMAIN
+ * paksa guru dah login moe-dl.edu.my sebelum boleh sampai sini pun). Dibalut
+ * try/catch -- gagal-selamat, kalau DELIMa sekat scope email, pulang '' bukan crash.
+ * Disahkan berfungsi utk akaun BUKAN-pemilik skrip via probe manual 2026-08-27.
  */
-function requestRegistrationOtp(profile) {
-  requireInstalled_();
-  if (!getConfig_().ALLOW_REGISTRATION) throw new Error('Pendaftaran staff ditutup oleh Super Admin.');
-  profile = sanitizeProfile_(profile);
-
-  if (!profile.name || !profile.email || !profile.position || !profile.unit) {
-    throw new Error('Nama, email, jawatan dan unit diperlukan.');
+function getActiveUserEmail_() {
+  try {
+    return normalizeEmail_(Session.getActiveUser().getEmail());
+  } catch (e) {
+    return '';
   }
-
-  const users = getUsers_();
-  const existing = users[profile.email];
-
-  if (existing && existing.status === 'approved') {
-    throw new Error('Email ini sudah mempunyai akaun. Gunakan menu Log Masuk.');
-  }
-
-  issueOtp_(profile.email, 'register', profile);
-
-  return {
-    success: true,
-    message: 'Kod OTP telah dihantar ke ' + maskEmail_(profile.email) + '.',
-    expiresMinutes: getConfig_().OTP_EXPIRY_MINUTES
-  };
 }
 
 /**
- * Registration Step 2:
- * OTP proves control of email, then application becomes PENDING.
+ * Registration -- SATU langkah, tiada OTP. Google session dah buktikan pemilikan
+ * email, jadi tinggal kumpul profil sahaja. Akaun terus jadi PENDING, tunggu admin.
  */
-function verifyRegistrationOtp(profile, otp) {
+function submitRegistration(profile) {
   requireInstalled_();
   if (!getConfig_().ALLOW_REGISTRATION) throw new Error('Pendaftaran staff ditutup oleh Super Admin.');
+
+  const email = getActiveUserEmail_();
+  if (!email) throw new Error('Tidak dapat kesan email akaun Google anda. Sila cuba semula atau hubungi Super Admin.');
+
   profile = sanitizeProfile_(profile);
-  verifyOtp_(profile.email, String(otp || '').trim(), 'register');
+  // Email dari CLIENT diabaikan sepenuhnya -- guna nilai SERVER di atas. Elak guru
+  // (atau sesiapa manipulate network tab) daftar guna email orang lain, sebab OTP
+  // yang dulu buktikan pemilikan email tu dah takde lagi.
+  profile.email = email;
+
+  if (!profile.name || !profile.position || !profile.unit) {
+    throw new Error('Nama, jawatan dan unit diperlukan.');
+  }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const users = getUsers_();
 
-    if (users[profile.email] && users[profile.email].status === 'approved') {
-      throw new Error('Akaun ini sudah diluluskan.');
+    if (users[email] && users[email].status === 'approved') {
+      throw new Error('Email ini sudah mempunyai akaun. Sila buka semula aplikasi.');
     }
 
-    users[profile.email] = {
-      email: profile.email,
+    users[email] = {
+      email: email,
       name: profile.name,
       position: profile.position,
       unit: profile.unit,
@@ -303,7 +295,7 @@ function verifyRegistrationOtp(profile, otp) {
     lock.releaseLock();
   }
 
-  addAudit_('REGISTRATION_SUBMITTED', profile.email + ' | ' + profile.name, profile.email);
+  addAudit_('REGISTRATION_SUBMITTED', email + ' | ' + profile.name, email);
 
   return {
     success: true,
@@ -313,61 +305,24 @@ function verifyRegistrationOtp(profile, otp) {
 }
 
 /**
- * Login Step 1.
- * OTP is only sent to approved users (or admin).
+ * Login -- zero-klik. Dipanggil client sebaik page load bila tiada token
+ * localStorage sedia ada. Semakan status SAMA PERSIS macam flow OTP lama, cuma
+ * langkah "buktikan email" tukar dari OTP kepada sesi Google yang dah sedia ada.
  */
-function requestLoginOtp(email) {
+function attemptAutoLogin() {
   requireInstalled_();
-  email = normalizeEmail_(email);
-  if (!isValidEmail_(email)) throw new Error('Email tidak sah.');
+  const email = getActiveUserEmail_();
+  if (!email) return { success: false, reason: 'no-email' };
 
   ensureAdminRecord_();
   const users = getUsers_();
   const user = users[email];
 
-  if (!user) {
-    throw new Error('Email belum berdaftar. Sila daftar dahulu.');
-  }
-
-  if (user.status === 'pending') {
-    throw new Error('Permohonan masih menunggu kelulusan Super Admin.');
-  }
-
-  if (user.status === 'rejected') {
-    throw new Error('Permohonan akses tidak diluluskan.');
-  }
-
-  if (user.status === 'suspended') {
-    throw new Error('Akaun ini telah digantung. Hubungi Super Admin.');
-  }
-
-  if (user.status !== 'approved') {
-    throw new Error('Akaun belum aktif.');
-  }
-
-  issueOtp_(email, 'login', null);
-
-  return {
-    success: true,
-    message: 'Kod OTP login dihantar ke ' + maskEmail_(email) + '.'
-  };
-}
-
-/**
- * Login Step 2.
- * Returns a bearer-style session token to store in browser localStorage.
- */
-function verifyLoginOtp(email, otp) {
-  requireInstalled_();
-  email = normalizeEmail_(email);
-  verifyOtp_(email, String(otp || '').trim(), 'login');
-
-  const users = getUsers_();
-  const user = users[email];
-
-  if (!user || user.status !== 'approved') {
-    throw new Error('Akaun tidak aktif.');
-  }
+  if (!user) return { success: false, reason: 'not-registered', email: email };
+  if (user.status === 'pending') return { success: false, reason: 'pending' };
+  if (user.status === 'rejected') return { success: false, reason: 'rejected' };
+  if (user.status === 'suspended') return { success: false, reason: 'suspended' };
+  if (user.status !== 'approved') return { success: false, reason: 'inactive' };
 
   const token = createSession_(user);
   addAudit_('LOGIN_SUCCESS', user.name || user.email, email);
@@ -375,8 +330,7 @@ function verifyLoginOtp(email, otp) {
   return {
     success: true,
     token: token,
-    user: publicUser_(user),
-    message: 'Log masuk berjaya.'
+    user: publicUser_(user)
   };
 }
 
@@ -816,100 +770,8 @@ function searchCalendarEvents(token, query) {
 }
 
 /* =========================================================
-   OTP + SESSION INTERNALS
+   SESSION INTERNALS
 ========================================================= */
-
-function issueOtp_(email, purpose, profile) {
-  email = normalizeEmail_(email);
-  if (!isValidEmail_(email)) throw new Error('Email tidak sah.');
-
-  const props = PropertiesService.getScriptProperties();
-  const key = otpKey_(email, purpose);
-  const existingRaw = props.getProperty(key);
-  const now = Date.now();
-
-  if (existingRaw) {
-    try {
-      const existing = JSON.parse(existingRaw);
-      if (existing.lastSentAt && (now - existing.lastSentAt) < getConfig_().OTP_RESEND_SECONDS * 1000) {
-        const wait = Math.ceil((getConfig_().OTP_RESEND_SECONDS * 1000 - (now - existing.lastSentAt)) / 1000);
-        throw new Error('Tunggu ' + wait + ' saat sebelum minta OTP baharu.');
-      }
-    } catch (e) {
-      if (String(e.message || '').indexOf('Tunggu ') === 0) throw e;
-    }
-  }
-
-  const quota = MailApp.getRemainingDailyQuota();
-  if (quota < 1) throw new Error('Kuota penghantaran email hari ini telah habis.');
-
-  const otp = generateOtp_();
-  const record = {
-    hash: hashOtp_(email, purpose, otp),
-    expiresAt: now + getConfig_().OTP_EXPIRY_MINUTES * 60 * 1000,
-    attempts: 0,
-    lastSentAt: now,
-    profile: profile || null
-  };
-
-  props.setProperty(key, JSON.stringify(record));
-
-  const cfg = getConfig_();
-  const subject = purpose === 'register'
-    ? 'Kod OTP Pendaftaran - ' + cfg.SHORT_NAME
-    : 'Kod OTP Log Masuk - ' + cfg.SHORT_NAME;
-
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto">
-      <h2 style="color:${cfg.THEME_COLOR}">${escapeHtmlServer_(cfg.APP_NAME)}</h2>
-      <p>Kod OTP anda:</p>
-      <div style="font-size:34px;font-weight:700;letter-spacing:8px;padding:16px;background:#f3f7fc;border-radius:12px;text-align:center">${otp}</div>
-      <p>Kod ini sah selama <strong>${getConfig_().OTP_EXPIRY_MINUTES} minit</strong>.</p>
-      <p style="color:#666;font-size:12px">Jika anda tidak membuat permintaan ini, abaikan email ini.</p>
-    </div>`;
-
-  MailApp.sendEmail({
-    to: email,
-    subject: subject,
-    htmlBody: html,
-    body: 'Kod OTP anda ialah ' + otp + '. Sah selama ' + getConfig_().OTP_EXPIRY_MINUTES + ' minit.',
-    name: getConfig_().SHORT_NAME + ' Calendar'
-  });
-}
-
-function verifyOtp_(email, otp, purpose) {
-  email = normalizeEmail_(email);
-  if (!/^\d{6}$/.test(otp)) throw new Error('OTP mesti 6 digit.');
-
-  const props = PropertiesService.getScriptProperties();
-  const key = otpKey_(email, purpose);
-  const raw = props.getProperty(key);
-
-  if (!raw) throw new Error('Tiada OTP aktif. Minta kod baharu.');
-
-  let record;
-  try { record = JSON.parse(raw); } catch (e) { throw new Error('Rekod OTP rosak. Minta kod baharu.'); }
-
-  if (Date.now() > record.expiresAt) {
-    props.deleteProperty(key);
-    throw new Error('OTP telah tamat tempoh. Minta kod baharu.');
-  }
-
-  record.attempts = Number(record.attempts || 0) + 1;
-  if (record.attempts > getConfig_().OTP_MAX_ATTEMPTS) {
-    props.deleteProperty(key);
-    throw new Error('Terlalu banyak cubaan. Minta OTP baharu.');
-  }
-
-  const expected = hashOtp_(email, purpose, otp);
-  if (record.hash !== expected) {
-    props.setProperty(key, JSON.stringify(record));
-    throw new Error('Kod OTP tidak betul.');
-  }
-
-  props.deleteProperty(key);
-  return true;
-}
 
 function createSession_(user) {
   const token = Utilities.getUuid() + Utilities.getUuid();
@@ -1305,21 +1167,6 @@ function ensureSecuritySalt_() {
   }
 }
 
-function generateOtp_() {
-  const hex = Utilities.getUuid().replace(/-/g, '').slice(0, 12);
-  const num = parseInt(hex, 16) % 1000000;
-  return String(num).padStart(6, '0');
-}
-
-function otpKey_(email, purpose) {
-  return 'OTP_V23_' + hashText_(purpose + '|' + normalizeEmail_(email)).slice(0, 40);
-}
-
-function hashOtp_(email, purpose, otp) {
-  const salt = PropertiesService.getScriptProperties().getProperty('PPD_SECURITY_SALT') || '';
-  return hashText_(normalizeEmail_(email) + '|' + purpose + '|' + otp + '|' + salt);
-}
-
 function hashText_(text) {
   const bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
@@ -1369,7 +1216,7 @@ function sendApprovalEmail_(user) {
         '<p>Salam ' + escapeHtmlServer_(user.name) + ',</p>' +
         '<p>Akses anda ke ' + escapeHtmlServer_(cfg.APP_NAME) + ' telah diluluskan sebagai <strong>' +
         escapeHtmlServer_(ROLE_CONFIG[user.role].label) + '</strong>.</p>' +
-        '<p>Anda kini boleh buka link dashboard dan log masuk menggunakan OTP email.</p>' +
+        '<p>Anda kini boleh buka link dashboard dan terus log masuk automatik menggunakan akaun Google anda.</p>' +
         '</div>',
       body: 'Akses ' + cfg.APP_NAME + ' anda telah diluluskan sebagai ' + ROLE_CONFIG[user.role].label + '.'
     });
@@ -1382,13 +1229,6 @@ function escapeHtmlServer_(s) {
   return String(s || '').replace(/[&<>"']/g, function(c) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
   });
-}
-
-function maskEmail_(email) {
-  const p = String(email).split('@');
-  if (p.length !== 2) return email;
-  const name = p[0];
-  return (name.length <= 2 ? name[0] + '*' : name.slice(0,2) + '***' + name.slice(-1)) + '@' + p[1];
 }
 
 function normalizeEmail_(email) {
