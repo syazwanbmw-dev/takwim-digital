@@ -495,6 +495,34 @@ function reactivateUser(token, email) {
   return { success: true, message: 'Akaun diaktifkan semula.' };
 }
 
+function deleteUser(token, email) {
+  const admin = requireSession_(token, 'canManageUsers');
+  email = normalizeEmail_(email);
+  if (email === normalizeEmail_(getConfig_().ADMIN_EMAIL)) throw new Error('Super Admin tidak boleh dipadam.');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const users = getUsers_();
+    const user = users[email];
+    if (!user) throw new Error('Pengguna tidak ditemui.');
+    // Hanya rekod yang sudah Suspended/Ditolak boleh dipadam kekal — staff
+    // Approved/Pending kena disuspend/ditolak dulu, elak admin tersilap
+    // padam akaun yang masih aktif log masuk.
+    if (user.status !== 'suspended' && user.status !== 'rejected') {
+      throw new Error('Hanya akaun Suspended atau Ditolak boleh dipadam kekal.');
+    }
+    delete users[email];
+    saveUsers_(users);
+  } finally {
+    lock.releaseLock();
+  }
+
+  revokeAllUserSessions_(email);
+  addAudit_('USER_DELETED', email, admin.user.email);
+  return { success: true, message: 'Akaun dipadam kekal.' };
+}
+
 function getAuditLog(token) {
   requireSession_(token, 'canViewAudit');
 

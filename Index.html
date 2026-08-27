@@ -709,7 +709,8 @@ function userCard(u){
   if(u.role!=='admin'){
     if(u.status==='pending')actions=`<button class="btn primary" onclick="approve(this,'${ea(u.email)}','editor')">Approve Editor</button><button class="btn secondary" onclick="approve(this,'${ea(u.email)}','viewer')">Approve Viewer</button><button class="btn danger" onclick="rejectU(this,'${ea(u.email)}')">Tolak</button>`;
     else if(u.status==='approved')actions=`<select onchange="changeRole('${ea(u.email)}',this.value)"><option value="">Tukar role…</option><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn danger" onclick="suspendU(this,'${ea(u.email)}')">Suspend</button>`;
-    else if(u.status==='suspended')actions=`<button class="btn primary" onclick="reactivateU(this,'${ea(u.email)}')">Aktifkan Semula</button>`;
+    else if(u.status==='suspended')actions=`<button class="btn primary" onclick="reactivateU(this,'${ea(u.email)}')">Aktifkan Semula</button><button class="btn danger" onclick="deleteU(this,'${ea(u.email)}')">Padam</button>`;
+    else if(u.status==='rejected')actions=`<button class="btn danger" onclick="deleteU(this,'${ea(u.email)}')">Padam</button>`;
   }
   return `<div class="userRow"><div><b>${esc(u.name||u.email)}</b><div class="eventSub">${esc(u.email)} • ${esc(u.position||'')} • ${esc(u.unit||'')}</div></div><span class="badge ${u.status==='approved'?(u.role||'viewer'):u.status}">${esc(u.status==='approved'?(u.roleLabel||u.role):u.status)}</span><div class="actions">${actions}</div></div>`;
 }
@@ -718,6 +719,7 @@ function rejectU(btn,email){if(!confirm('Tolak permohonan ini?'))return;const un
 function changeRole(email,role){if(role)gs('changeUserRole',[TOKEN,email,role],r=>{toast(r.message);renderUsers();renderAudit()})}
 function suspendU(btn,email){if(!confirm('Gantung akaun ini?'))return;const unlock=lockBtn(btn,'Memproses…');gs('suspendUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
 function reactivateU(btn,email){const unlock=lockBtn(btn,'Memproses…');gs('reactivateUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
+function deleteU(btn,email){if(!confirm('Padam akaun ini secara KEKAL? Tindakan ini tidak boleh diundur.'))return;const unlock=lockBtn(btn,'Memproses…');gs('deleteUser',[TOKEN,email],r=>{unlock();toast(r.message);renderUsers();renderAudit()},e=>{unlock();showError(e)})}
 
 function renderAudit(){
   auditPage.innerHTML='<h2>Audit Log</h2><div id="auditList" class="list"><div class="empty">Memuatkan…</div></div>';
