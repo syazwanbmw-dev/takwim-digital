@@ -10,6 +10,7 @@ const DEFAULT_CONFIG = {
   THEME_COLOR: '#0b6ef3',
   ALLOW_REGISTRATION: true,
   FOOTER_TEXT: '',
+  ICON_URL: '',
   SESSION_DAYS: 7,
   SESSION_ABSOLUTE_DAYS: 30,
   MAX_AUDIT_ROWS: 400
@@ -48,7 +49,8 @@ function validateSetupInput_(input) {
     ADMIN_EMAIL: normalizeEmail_(input.adminEmail),
     THEME_COLOR: String(input.themeColor || '#0b6ef3').trim(),
     ALLOW_REGISTRATION: input.allowRegistration !== false,
-    FOOTER_TEXT: String(input.footerText || '').trim().slice(0, 180)
+    FOOTER_TEXT: String(input.footerText || '').trim().slice(0, 180),
+    ICON_URL: String(input.iconUrl || '').trim().slice(0, 500)
   };
 
   if (!cfg.APP_NAME || !cfg.OFFICE_NAME || !cfg.SHORT_NAME || !cfg.CALENDAR_ID || !cfg.ADMIN_EMAIL) {
@@ -56,6 +58,9 @@ function validateSetupInput_(input) {
   }
   if (!isValidEmail_(cfg.ADMIN_EMAIL)) throw new Error('Email Super Admin tidak sah.');
   if (!validateHexColor_(cfg.THEME_COLOR)) throw new Error('Warna tema tidak sah.');
+  if (cfg.ICON_URL && !/^https:\/\/\S+$/i.test(cfg.ICON_URL)) {
+    throw new Error('URL ikon mesti pautan langsung bermula dengan https://');
+  }
   return cfg;
 }
 
@@ -71,7 +76,8 @@ function getBootstrapState() {
       timezone: cfg.TIMEZONE,
       themeColor: cfg.THEME_COLOR,
       allowRegistration: cfg.ALLOW_REGISTRATION,
-      footerText: cfg.FOOTER_TEXT
+      footerText: cfg.FOOTER_TEXT,
+      iconUrl: cfg.ICON_URL
     }
   };
 }
@@ -137,7 +143,8 @@ function getSystemSettings(token) {
     adminEmail: cfg.ADMIN_EMAIL,
     themeColor: cfg.THEME_COLOR,
     allowRegistration: cfg.ALLOW_REGISTRATION,
-    footerText: cfg.FOOTER_TEXT
+    footerText: cfg.FOOTER_TEXT,
+    iconUrl: cfg.ICON_URL
   };
 }
 
@@ -153,7 +160,8 @@ function updateSystemSettings(token, input) {
     adminEmail: current.ADMIN_EMAIL,
     themeColor: input.themeColor || current.THEME_COLOR,
     allowRegistration: input.allowRegistration !== false,
-    footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT
+    footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT,
+    iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL
   };
   const next = Object.assign({}, DEFAULT_CONFIG, validateSetupInput_(mergedInput));
 
