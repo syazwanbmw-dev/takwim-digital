@@ -94,6 +94,11 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
      kecuali pengguna check "Background graphics" dalam dialog print ATAU CSS paksa guna
      property ni. Tanpanya, kelabu label hari + kuning sel cuti dua-dua senyap hilang. */
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* `*` di atas paksa SEMUA background keluar masa cetak -- termasuk `html,body`
+     yang set --bg (#f5f8fc biru cair) untuk skrin. Tanpa override ni, seluruh
+     muka surat cetak kena wash biru cair. Kertas mesti PUTIH; cuma sel tarikh
+     yang berwarna (kuning cuti / biru program via .pcell.activity/.holiday). */
+  html,body,#printArea,.printPage{background:#fff}
   body>div:not(#printArea){display:none!important}
   #printArea{display:block!important}
   .printHead{text-align:center;margin-bottom:14px}
@@ -203,12 +208,17 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
         <div class="notice pending"><strong>Permohonan dihantar.</strong><br>Tunggu Super Admin meluluskan akses. Buka semula pautan ini selepas diluluskan.</div>
       </div>
     </div>
+
+    <div id="loggedOutPane" class="hidden">
+      <div class="notice">Anda telah log keluar.</div>
+      <button class="btn primary full" style="margin-top:12px" onclick="relogin()">Log Masuk Semula</button>
+    </div>
   </div>
 </div>
 
 <div id="appScreen" class="app hidden">
   <aside id="sidebar" class="sidebar">
-    <div class="brand"><div style="font-size:30px">🏛️</div><h2 id="brandAppName"><?= appName ?></h2><small id="brandOfficeName"><?= officeName ?></small></div>
+    <div class="brand"><div id="brandLogo" style="font-size:30px">🏛️</div><h2 id="brandAppName"><?= appName ?></h2><small id="brandOfficeName"><?= officeName ?></small></div>
     <nav class="nav">
       <button class="navbtn active" data-page="dashboardPage">▦ Dashboard</button>
       <button class="navbtn" data-page="calendarPage">▣ Calendar</button>
@@ -322,6 +332,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('setupScreen').classList.add('hidden');
     document.getElementById('authScreen').classList.remove('hidden');
     if(TOKEN){restoreSessionUI();return}
+    if(sessionStorage.getItem('takwim_logged_out')){showLoggedOut();return}
     attemptAutoLoginUI();
   });
 });
@@ -513,7 +524,35 @@ function applyRoleUI(){
   navUsers.classList.toggle('hidden',!PERMS.canManageUsers);navAudit.classList.toggle('hidden',!PERMS.canViewAudit);
   navSettings.classList.toggle('hidden',!PERMS.canManageUsers);
 }
-function logoutUI(){gs('logout',[TOKEN],()=>{localStorage.removeItem('calendar_v3_token');localStorage.removeItem('ppd_v23_token');location.reload()})}
+// Log keluar: revoke sesi di server, kosongkan token, set flag sesi supaya boot flow
+// TAK auto-login balik (kalau tidak, approved user terus masuk semula). Guna transisi
+// JS ke pane "dah log keluar" -- BUKAN location.reload(): dalam iframe HtmlService,
+// location merujuk URL sementara *.googleusercontent.com yang tak boleh dimuat semula,
+// jadi reload = skrin putih. Flag sessionStorage mati bila tab ditutup -> tab baharu
+// esok auto-login macam biasa.
+function logoutUI(){
+  gs('logout',[TOKEN],()=>{
+    localStorage.removeItem('calendar_v3_token');
+    localStorage.removeItem('ppd_v23_token');
+    TOKEN='';
+    sessionStorage.setItem('takwim_logged_out','1');
+    showLoggedOut();
+  });
+}
+function showLoggedOut(){
+  appScreen.classList.add('hidden');
+  authScreen.classList.remove('hidden');
+  authChecking.classList.add('hidden');
+  authStatus.classList.add('hidden');
+  registerPane.classList.add('hidden');
+  document.getElementById('loggedOutPane').classList.remove('hidden');
+}
+function relogin(){
+  sessionStorage.removeItem('takwim_logged_out');
+  document.getElementById('loggedOutPane').classList.add('hidden');
+  authChecking.classList.remove('hidden');
+  attemptAutoLoginUI();
+}
 
 function renderAll(){
   topMeta.textContent=DATA.todayLabel+' • '+DATA.calendarName;
