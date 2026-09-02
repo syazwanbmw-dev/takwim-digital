@@ -106,6 +106,7 @@ Isi:
 | Nama Pendek | untuk label sidebar, cth. "Takwim" |
 | **Google Calendar ID** | dari Google Calendar → **Settings** kalendar berkenaan → **Integrate calendar** → **Calendar ID** (rupa `xxxx@group.calendar.google.com`, atau alamat email anda untuk kalendar utama) |
 | **Email Super Admin** | **mesti sama** dengan akaun Google yang deploy skrip ini |
+| Domain Email Dibenarkan | *pilihan* — senarai domain (dipisah koma) yang dibenarkan daftar sendiri, cth `moe-dl.edu.my, sekolahku.edu.my`. Kosong = benarkan semua. Domain Super Admin mesti termasuk. |
 | Warna Tema | kod hex, cth. `#0b6ef3` |
 | Teks Footer / URL Ikon | pilihan; URL ikon mesti `https://` |
 
@@ -152,6 +153,13 @@ Untuk pembangunan, deployment **`@HEAD`** (Test deployment) auto-ikut setiap
   orang luar boleh daftar (mereka jadi *pending*, tidak nampak apa-apa sehingga
   diluluskan), tetapi ini meluaskan pendedahan. **Jangan sekali-kali** guna
   `Anyone (anonymous)` — app tak dapat baca email, tiada siapa boleh log masuk.
+- **Kawalan pendaftaran** (bila akses = `Anyone with a Google Account`):
+  - *Domain Email Dibenarkan* (Setup Wizard / System Settings) — hadkan siapa boleh daftar
+    kepada domain sekolah anda sahaja.
+  - Rate limit terbina dalam: maksimum 50 akaun *pending* serentak + maksimum 10 pendaftaran
+    seminit merentas semua pengguna (`DEFAULT_CONFIG.MAX_PENDING_REGISTRATIONS` /
+    `MAX_REGISTRATIONS_PER_MINUTE`). Cubaan yang ditolak direkod dalam Log Audit
+    (`REGISTRATION_DOMAIN_BLOCKED` / `REGISTRATION_QUEUE_FULL` / `REGISTRATION_THROTTLED`).
 - **Tiada pangkalan data, tiada secret dalam kod.** Semua tetapan dalam Script
   Properties. Repo ini selamat untuk jadi public.
 - Kalendar cuti umum Malaysia adalah awam & baca-sahaja — selamat di-hardcode.
@@ -265,6 +273,7 @@ Open the Web app URL. Since the system is not installed yet, the **Setup Wizard*
 | Short name | sidebar label, e.g. "Takwim" |
 | **Google Calendar ID** | Google Calendar → that calendar's **Settings** → **Integrate calendar** → **Calendar ID** (looks like `xxxx@group.calendar.google.com`, or your email for the primary calendar) |
 | **Super Admin email** | **must match** the Google account that deployed the script |
+| Allowed email domains | *optional* — comma-separated domains permitted to self-register, e.g. `moe-dl.edu.my, sekolahku.edu.my`. Empty = allow all. The Super Admin's domain must be included. |
 | Theme colour | hex, e.g. `#0b6ef3` |
 | Footer text / Icon URL | optional; icon URL must be `https://` |
 
@@ -307,6 +316,13 @@ For development, the **`@HEAD`** test deployment auto-follows every `clasp push`
   outsiders can then register (they become *pending*, see nothing until approved),
   but it widens exposure. **Never** use `Anyone (anonymous)` — the app cannot read an
   email and no one can sign in.
+- **Registration controls** (when access = `Anyone with a Google Account`):
+  - *Allowed email domains* (Setup Wizard / System Settings) — restrict self-registration
+    to your school's domain(s).
+  - Built-in rate limits: max 50 concurrent *pending* accounts + max 10 registrations per
+    minute across all users (`DEFAULT_CONFIG.MAX_PENDING_REGISTRATIONS` /
+    `MAX_REGISTRATIONS_PER_MINUTE`). Rejected attempts are recorded in the audit log
+    (`REGISTRATION_DOMAIN_BLOCKED` / `REGISTRATION_QUEUE_FULL` / `REGISTRATION_THROTTLED`).
 - **No database, no secrets in code.** All config lives in Script Properties. This
   repo is safe to be public.
 - The Malaysia public-holiday calendar is public and read-only — safe to hardcode.

@@ -161,6 +161,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
         <div class="field">
           <label><input id="setupAllowRegistration" type="checkbox" checked style="width:auto;margin-right:7px"> Benarkan staff daftar sendiri (perlu kelulusan admin)</label>
         </div>
+        <div class="field"><label>DOMAIN EMAIL DIBENARKAN (PILIHAN)</label><input id="setupAllowedDomains" placeholder="Contoh: moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Berguna bila akses web app = "Anyone with a Google Account".</div></div>
         <div class="field"><label>TEKS FOOTER (PILIHAN)</label><input id="setupFooter" placeholder="Contoh: Sistem Dalaman Organisasi"></div>
 
         <div class="row">
@@ -426,6 +427,7 @@ function setupPayload(){
     calendarId:setupCalendarId.value.trim(),
     themeColor:setupThemeColor.value,
     allowRegistration:setupAllowRegistration.checked,
+    allowedEmailDomains:setupAllowedDomains.value.trim(),
     footerText:setupFooter.value.trim()
   };
 }
@@ -464,6 +466,7 @@ function renderSettings(){
         <div class="field wide"><label>SUPER ADMIN</label><input value="${attr(s.adminEmail)}" disabled><div class="eventSub">Email Super Admin dikunci untuk keselamatan installer.</div></div>
         <div class="field"><label>WARNA TEMA</label><div class="settingsColor"><input id="setThemeColor" type="color" value="${attr(s.themeColor)}"><span>${esc(s.themeColor)}</span></div></div>
         <div class="field"><label>PENDAFTARAN STAFF</label><select id="setRegistration"><option value="yes" ${s.allowRegistration?'selected':''}>Dibuka + Admin Approval</option><option value="no" ${!s.allowRegistration?'selected':''}>Ditutup</option></select></div>
+        <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
         <div class="field wide"><label>IKON (URL GAMBAR)</label><input id="setIconUrl" value="${attr(s.iconUrl||'')}" placeholder="https://.../logo.png — kosongkan untuk guna emoji 🏛️"><div class="eventSub">Direct link ke fail gambar (PNG/SVG/JPG). Mesti bermula https://</div></div>
       </div>
@@ -475,7 +478,7 @@ function saveSettingsUI(btn){
     appName:setAppName.value.trim(),officeName:setOfficeName.value.trim(),shortName:setShortName.value.trim(),
     timezone:setTimezone.value.trim(),calendarId:setCalendarId.value.trim(),themeColor:setThemeColor.value,
     allowRegistration:setRegistration.value==='yes',footerText:setFooter.value.trim(),
-    iconUrl:setIconUrl.value.trim()
+    iconUrl:setIconUrl.value.trim(),allowedEmailDomains:setAllowedDomains.value.trim()
   };
   const unlock=lockBtn(btn,'Menyimpan…');
   gs('updateSystemSettings',[TOKEN,p],r=>{

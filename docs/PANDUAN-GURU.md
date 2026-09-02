@@ -127,6 +127,7 @@ Kita akan perlukan **Calendar ID** kalendar ini nanti (Langkah 7).
    | Nama Pendek | *Takwim* (untuk label menu) |
    | Google Calendar ID | tampal nilai dari Langkah 7 |
    | E-mel Super Admin | **e-mel akaun yang anda guna sekarang** — mesti sama |
+   | Domain E-mel Dibenarkan | *pilihan* — hanya e-mel domain ini boleh daftar (cth `moe-dl.edu.my`). Kosongkan = benarkan semua. Berguna kalau anda guna Gmail biasa + akses "Anyone with a Google Account". Domain Super Admin **mesti** termasuk. |
    | Warna Tema / Footer / URL Ikon | pilihan |
 
 3. Klik **Test Connection**. Jika hijau (berjaya), klik **Install**.

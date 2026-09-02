@@ -13,7 +13,15 @@ const DEFAULT_CONFIG = {
   ICON_URL: '',
   SESSION_DAYS: 7,
   SESSION_ABSOLUTE_DAYS: 30,
-  MAX_AUDIT_ROWS: 400
+  MAX_AUDIT_ROWS: 400,
+  // Senarai domain email dibenarkan untuk daftar sendiri (dipisah koma, tanpa '@').
+  // Kosong = benarkan semua. Berguna bila webapp access = "Anyone with a Google Account".
+  ALLOWED_EMAIL_DOMAINS: '',
+  // Kawalan banjir pendaftaran (tiada UI -- pemasang mahir ubah via APP_CONFIG_V3).
+  // MAX_PENDING_REGISTRATIONS: siling keras jumlah akaun 'pending' serentak.
+  // MAX_REGISTRATIONS_PER_MINUTE: throttle letusan merentas SEMUA pengguna.
+  MAX_PENDING_REGISTRATIONS: 50,
+  MAX_REGISTRATIONS_PER_MINUTE: 10
 };
 
 function getConfig_() {
@@ -50,7 +58,8 @@ function validateSetupInput_(input) {
     THEME_COLOR: String(input.themeColor || '#0b6ef3').trim(),
     ALLOW_REGISTRATION: input.allowRegistration !== false,
     FOOTER_TEXT: String(input.footerText || '').trim().slice(0, 180),
-    ICON_URL: String(input.iconUrl || '').trim().slice(0, 500)
+    ICON_URL: String(input.iconUrl || '').trim().slice(0, 500),
+    ALLOWED_EMAIL_DOMAINS: parseDomainList_(input.allowedEmailDomains).slice(0, 20).join(',')
   };
 
   if (!cfg.APP_NAME || !cfg.OFFICE_NAME || !cfg.SHORT_NAME || !cfg.CALENDAR_ID || !cfg.ADMIN_EMAIL) {
@@ -60,6 +69,17 @@ function validateSetupInput_(input) {
   if (!validateHexColor_(cfg.THEME_COLOR)) throw new Error('Warna tema tidak sah.');
   if (cfg.ICON_URL && !/^https:\/\/\S+$/i.test(cfg.ICON_URL)) {
     throw new Error('URL ikon mesti pautan langsung bermula dengan https://');
+  }
+  if (cfg.ALLOWED_EMAIL_DOMAINS) {
+    const doms = cfg.ALLOWED_EMAIL_DOMAINS.split(',');
+    const bad = doms.filter(function (d) { return !isValidDomain_(d); });
+    if (bad.length) throw new Error('Domain email tidak sah: ' + bad.join(', '));
+    // Pagar footgun: senarai yang tak masukkan domain Super Admin akan kunci admin
+    // keluar (dan biasanya bermakna admin salah taip senarai).
+    const adminDom = emailDomain_(cfg.ADMIN_EMAIL);
+    if (adminDom && doms.indexOf(adminDom) === -1) {
+      throw new Error('Domain email Super Admin (' + adminDom + ') mesti termasuk dalam senarai domain dibenarkan.');
+    }
   }
   return cfg;
 }
@@ -144,7 +164,8 @@ function getSystemSettings(token) {
     themeColor: cfg.THEME_COLOR,
     allowRegistration: cfg.ALLOW_REGISTRATION,
     footerText: cfg.FOOTER_TEXT,
-    iconUrl: cfg.ICON_URL
+    iconUrl: cfg.ICON_URL,
+    allowedEmailDomains: cfg.ALLOWED_EMAIL_DOMAINS
   };
 }
 
@@ -161,7 +182,8 @@ function updateSystemSettings(token, input) {
     themeColor: input.themeColor || current.THEME_COLOR,
     allowRegistration: input.allowRegistration !== false,
     footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT,
-    iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL
+    iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL,
+    allowedEmailDomains: input.allowedEmailDomains !== undefined ? input.allowedEmailDomains : current.ALLOWED_EMAIL_DOMAINS
   };
   const next = Object.assign({}, DEFAULT_CONFIG, validateSetupInput_(mergedInput));
 
@@ -262,10 +284,18 @@ function getActiveUserEmail_() {
  */
 function submitRegistration(profile) {
   requireInstalled_();
-  if (!getConfig_().ALLOW_REGISTRATION) throw new Error('Pendaftaran staff ditutup oleh Super Admin.');
+  const cfg = getConfig_();
+  if (!cfg.ALLOW_REGISTRATION) throw new Error('Pendaftaran staff ditutup oleh Super Admin.');
 
   const email = getActiveUserEmail_();
   if (!email) throw new Error('Tidak dapat kesan email akaun Google anda. Sila cuba semula atau hubungi Super Admin.');
+
+  // Penapis domain -- murah, tiada lock. addAudit_ selamat di sini (lock belum dipegang).
+  const allowedDomains = parseDomainList_(cfg.ALLOWED_EMAIL_DOMAINS);
+  if (allowedDomains.length && allowedDomains.indexOf(emailDomain_(email)) === -1) {
+    addAudit_('REGISTRATION_DOMAIN_BLOCKED', email, email);
+    throw new Error('Pendaftaran hanya dibenarkan untuk email domain: ' + allowedDomains.join(', ') + '.');
+  }
 
   profile = sanitizeProfile_(profile);
   // Email dari CLIENT diabaikan sepenuhnya -- guna nilai SERVER di atas. Elak guru
@@ -277,31 +307,75 @@ function submitRegistration(profile) {
     throw new Error('Nama, jawatan dan unit diperlukan.');
   }
 
+  // Semakan kadar mesti DALAM lock (kira pending + baca/tulis throttle mesti atomik).
+  // addAudit_ guna lock yang SAMA -> tak boleh dipanggil di sini; tangguh ke selepas release.
+  const props = PropertiesService.getScriptProperties();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let rateBlock = null;   // { audit: string|null, msg: string } kalau ditolak
   try {
     const users = getUsers_();
+    const existing = users[email];
 
-    if (users[email] && users[email].status === 'approved') {
+    if (existing && existing.status === 'approved') {
       throw new Error('Email ini sudah mempunyai akaun. Sila buka semula aplikasi.');
     }
 
-    users[email] = {
-      email: email,
-      name: profile.name,
-      position: profile.position,
-      unit: profile.unit,
-      status: 'pending',
-      role: '',
-      createdAt: new Date().toISOString(),
-      approvedAt: '',
-      approvedBy: '',
-      suspendedAt: ''
-    };
+    if (existing && existing.status === 'pending') {
+      // Kemas kini profil sahaja (cth betulkan typo). Bukan akaun net-baharu --
+      // tak dikira terhadap had/throttle, createdAt dikekalkan.
+      existing.name = profile.name;
+      existing.position = profile.position;
+      existing.unit = profile.unit;
+      saveUsers_(users);
+    } else {
+      // Akaun net-baharu (baharu, ATAU daftar semula selepas rejected/suspended).
+      const maxPending = Number(cfg.MAX_PENDING_REGISTRATIONS) || 50;
+      const maxPerMin = Number(cfg.MAX_REGISTRATIONS_PER_MINUTE) || 10;
+      const pendingCount = Object.keys(users).reduce(function (n, k) {
+        return n + (users[k] && users[k].status === 'pending' ? 1 : 0);
+      }, 0);
 
-    saveUsers_(users);
+      let box = {};
+      try { box = JSON.parse(props.getProperty('PPD_REG_THROTTLE_V1') || '{}'); } catch (e) { box = {}; }
+      const now = Date.now();
+      let stamps = Array.isArray(box.s) ? box.s.filter(function (t) { return typeof t === 'number' && now - t < 60000; }) : [];
+      let lastAudit = typeof box.a === 'number' ? box.a : 0;
+
+      if (pendingCount >= maxPending) {
+        rateBlock = { audit: 'REGISTRATION_QUEUE_FULL', msg: 'Barisan pendaftaran penuh (' + maxPending + '). Sila hubungi Super Admin untuk luluskan permohonan sedia ada.' };
+      } else if (stamps.length >= maxPerMin) {
+        // Audit throttle SEKALI setiap 5 minit -- elak penyerang evict sejarah audit
+        // (ring buffer MAX_AUDIT_ROWS) dengan spam REGISTRATION_THROTTLED.
+        const doAudit = now - lastAudit > 300000;
+        if (doAudit) lastAudit = now;
+        rateBlock = { audit: doAudit ? 'REGISTRATION_THROTTLED' : null, msg: 'Terlalu banyak pendaftaran serentak. Sila cuba lagi dalam seminit.' };
+        props.setProperty('PPD_REG_THROTTLE_V1', JSON.stringify({ s: stamps, a: lastAudit }));
+      } else {
+        stamps.push(now);
+        props.setProperty('PPD_REG_THROTTLE_V1', JSON.stringify({ s: stamps.slice(-100), a: lastAudit }));
+        users[email] = {
+          email: email,
+          name: profile.name,
+          position: profile.position,
+          unit: profile.unit,
+          status: 'pending',
+          role: '',
+          createdAt: new Date().toISOString(),
+          approvedAt: '',
+          approvedBy: '',
+          suspendedAt: ''
+        };
+        saveUsers_(users);
+      }
+    }
   } finally {
     lock.releaseLock();
+  }
+
+  if (rateBlock) {
+    if (rateBlock.audit) addAudit_(rateBlock.audit, email, email);
+    throw new Error(rateBlock.msg);
   }
 
   addAudit_('REGISTRATION_SUBMITTED', email + ' | ' + profile.name, email);
@@ -1276,7 +1350,65 @@ function isValidEmail_(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// "moe-dl.edu.my, @Sekolahku.Edu.My ; x" -> ['moe-dl.edu.my','sekolahku.edu.my']
+// Buang '@' di depan, lowercase, pisah ikut koma/ruang/semikolon, tolak yang kosong.
+function parseDomainList_(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .split(/[\s,;]+/)
+    .map(function (d) { return d.replace(/^@+/, '').trim(); })
+    .filter(function (d) { return d.length > 0; });
+}
+
+function isValidDomain_(d) {
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(String(d || ''));
+}
+
+// Domain bahagian selepas '@' bagi satu email (sudah dinormalkan lowercase).
+function emailDomain_(email) {
+  var parts = String(email || '').split('@');
+  return parts.length === 2 ? parts[1] : '';
+}
+
 function sortByStart_(a,b) { return new Date(a.start) - new Date(b.start); }
 function startOfDay_(d) { const x=new Date(d);x.setHours(0,0,0,0);return x; }
 function endOfDay_(d) { const x=new Date(d);x.setHours(23,59,59,999);return x; }
 function formatDate_(d,p) { return Utilities.formatDate(d, getConfig_().TIMEZONE, p); }
+
+/* =========================================================
+   SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
+   Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.
+   Untuk ujian had/throttle bersifat stateful, guna checklist manual di @HEAD.
+   ========================================================= */
+function selfTestRegHelpers_() {
+  const results = [];
+  function ok(name, cond) { results.push((cond ? 'PASS' : 'FAIL') + ' :: ' + name); }
+  function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  ok('parseDomainList_ pisah + buang @ + lowercase',
+     eq(parseDomainList_(' @MOE-DL.edu.my ,  Sekolahku.Edu.My ;x.com'),
+        ['moe-dl.edu.my', 'sekolahku.edu.my', 'x.com']));
+  ok('parseDomainList_ kosong -> []', eq(parseDomainList_(''), []) && eq(parseDomainList_(null), []));
+  ok('isValidDomain_ terima domain biasa', isValidDomain_('moe-dl.edu.my') && isValidDomain_('a.co'));
+  ok('isValidDomain_ tolak tiada titik / ada @ / hujung dash',
+     !isValidDomain_('localhost') && !isValidDomain_('@x.com') && !isValidDomain_('x-.com'));
+  ok('emailDomain_ ambil bahagian selepas @',
+     emailDomain_('guru@moe-dl.edu.my') === 'moe-dl.edu.my' && emailDomain_('rosak') === '');
+
+  // Simulasi keputusan gerbang domain (logik sama macam submitRegistration)
+  function domainAllowed(list, email) {
+    const allow = parseDomainList_(list);
+    return !allow.length || allow.indexOf(emailDomain_(email)) !== -1;
+  }
+  ok('domain: kosong = benarkan semua', domainAllowed('', 'sesiapa@gmail.com'));
+  ok('domain: dalam senarai = lulus', domainAllowed('moe-dl.edu.my', 'guru@moe-dl.edu.my'));
+  ok('domain: luar senarai = tolak', !domainAllowed('moe-dl.edu.my', 'orang@gmail.com'));
+  ok('domain: subdomain TIDAK auto-lulus (padanan tepat)',
+     !domainAllowed('moe-dl.edu.my', 'x@student.moe-dl.edu.my'));
+
+  const summary = results.join('\n');
+  Logger.log(summary);
+  const failed = results.filter(function (r) { return r.indexOf('FAIL') === 0; }).length;
+  if (failed) throw new Error(failed + ' ujian GAGAL:\n' + summary);
+  return summary;
+}
