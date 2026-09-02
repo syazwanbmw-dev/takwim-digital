@@ -59,10 +59,13 @@
     border-radius:10px; overflow-x:auto; font-size:13.5px; line-height:1.55;
   }
   pre code{background:none; padding:0; color:inherit; font-size:inherit}
-  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14.5px}
-  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top}
+  code{overflow-wrap:anywhere; word-break:break-word}
+  .tscroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:14px 0; max-width:100%}
+  table{border-collapse:collapse; width:100%; font-size:14.5px}
+  .tscroll table{margin:0}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; overflow-wrap:anywhere}
   th{background:rgba(148,163,184,.12); font-weight:600}
-  td.c,th.c{text-align:center}
+  td.c,th.c{text-align:center; white-space:nowrap}
   .note{
     background:var(--warn-bg); border:1px solid var(--warn-line);
     border-radius:10px; padding:12px 16px; margin:16px 0;
@@ -103,7 +106,8 @@
   disediakan — sistem guna Google Calendar sebagai sumber data dan Apps Script Script
   Properties untuk tetapan.</p>
 
-  <table>
+  <div class="tscroll">
+    <table>
     <tr><th>Lapisan</th><th>Guna apa</th></tr>
     <tr><td>Runtime</td><td>Google Apps Script (standalone, V8)</td></tr>
     <tr><td>"Pangkalan data" acara</td><td><strong>Google Calendar</strong> — setiap aktiviti = satu Calendar event</td></tr>
@@ -112,6 +116,7 @@
     <tr><td>Frontend</td><td>Satu fail <code>Index.html</code> (HTML + CSS + JS, tiada framework)</td></tr>
     <tr><td>Identiti</td><td>Sesi Google sahaja — tiada kata laluan disimpan</td></tr>
   </table>
+  </div>
 
   <h2>Prasyarat</h2>
   <ol>
@@ -160,18 +165,21 @@ cd takwim-digital</code></pre>
     <pre><code>clasp deploy --description "v1"</code></pre>
     <p>atau melalui editor: <code>clasp open</code> → <strong>Deploy</strong> →
     <strong>New deployment</strong> → jenis <strong>Web app</strong>:</p>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Tetapan</th><th>Nilai</th></tr>
       <tr><td><strong>Execute as</strong></td><td><strong>Me</strong> (akaun anda) — wajib; semua operasi kalendar jalan sebagai anda</td></tr>
       <tr><td><strong>Who has access</strong></td><td><strong>Anyone within [domain anda]</strong> (disyorkan untuk staf) — atau <strong>Anyone with a Google Account</strong> jika perlu orang luar (lihat Nota Keselamatan)</td></tr>
     </table>
+  </div>
     <p>Kali pertama, Google minta kebenaran (akses Calendar, hantar email). Terima. Salin <strong>URL Web app</strong>.</p>
   </div>
 
   <div class="step">
     <h3>Langkah 6 — Setup Wizard</h3>
     <p>Buka URL Web app. Kerana sistem belum dipasang, <strong>Setup Wizard</strong> muncul:</p>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Medan</th><th>Nota</th></tr>
       <tr><td>Nama Sistem / Aplikasi</td><td>cth. "Takwim SK Contoh"</td></tr>
       <tr><td>Nama Organisasi</td><td>cth. "SK Contoh, Kuala Lumpur"</td></tr>
@@ -181,6 +189,7 @@ cd takwim-digital</code></pre>
       <tr><td>Warna Tema</td><td>kod hex, cth. <code>#0b6ef3</code></td></tr>
       <tr><td>Teks Footer / URL Ikon</td><td>pilihan; URL ikon mesti <code>https://</code></td></tr>
     </table>
+  </div>
     <p>Tekan <strong>Test Connection</strong> → sistem sahkan kalendar boleh diakses + kuota
     email ada → <strong>Install</strong>. Muat semula → anda auto-login sebagai Super Admin.</p>
   </div>
@@ -192,12 +201,14 @@ cd takwim-digital</code></pre>
       <li>Akaun baharu jadi <strong>pending</strong>.</li>
       <li>Super Admin → <strong>System Settings → Users</strong> → luluskan + beri peranan.</li>
     </ol>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Peranan</th><th class="c">Lihat</th><th class="c">Cipta</th><th class="c">Edit</th><th class="c">Padam</th><th class="c">Urus pengguna</th><th class="c">Log audit</th><th class="c">Kategori "Cuti Sekolah"</th></tr>
       <tr><td><strong>admin</strong> (Super Admin)</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
       <tr><td><strong>editor</strong></td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
       <tr><td><strong>viewer</strong></td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
     </table>
+  </div>
   </div>
 
   <h2>Kemas kini kemudian</h2>
@@ -222,7 +233,8 @@ cd takwim-digital</code></pre>
   </div>
 
   <h2>Menyelesaikan masalah</h2>
-  <table>
+  <div class="tscroll">
+    <table>
     <tr><th>Gejala</th><th>Punca / penyelesaian</th></tr>
     <tr><td>"Sistem belum dipasang"</td><td>Wizard belum siap — buka <strong>URL Web app</strong>, bukan editor Apps Script.</td></tr>
     <tr><td>"Calendar ID tidak dapat diakses"</td><td>Akaun deployer tak langgan / tiada akses ke kalendar itu. Tambah kalendar ke akaun tersebut dulu.</td></tr>
@@ -230,6 +242,7 @@ cd takwim-digital</code></pre>
     <tr><td>Web app domain 404 / akses ditolak</td><td>Untuk domain Workspace dengan <code>access: DOMAIN</code>, guna bentuk URL <code>https://script.google.com/a/macros/DOMAIN_ANDA/s/DEPLOYMENT_ID/exec</code>.</td></tr>
     <tr><td>Email kelulusan tak sampai</td><td>Kuota harian MailApp (Gmail biasa = 100/hari) habis, atau tersasar ke folder spam.</td></tr>
   </table>
+  </div>
 
 </section>
 
@@ -240,7 +253,8 @@ cd takwim-digital</code></pre>
   <p><strong>Deploy your own copy from scratch.</strong> There is no database to provision —
   the system uses Google Calendar as its data store and Apps Script Script Properties for settings.</p>
 
-  <table>
+  <div class="tscroll">
+    <table>
     <tr><th>Layer</th><th>What it uses</th></tr>
     <tr><td>Runtime</td><td>Google Apps Script (standalone, V8)</td></tr>
     <tr><td>Event "database"</td><td><strong>Google Calendar</strong> — one activity = one Calendar event</td></tr>
@@ -249,6 +263,7 @@ cd takwim-digital</code></pre>
     <tr><td>Frontend</td><td>Single <code>Index.html</code> (HTML + CSS + JS, no framework)</td></tr>
     <tr><td>Identity</td><td>Google session only — no passwords stored</td></tr>
   </table>
+  </div>
 
   <h2>Prerequisites</h2>
   <ol>
@@ -297,18 +312,21 @@ cd takwim-digital</code></pre>
     <pre><code>clasp deploy --description "v1"</code></pre>
     <p>or via the editor: <code>clasp open</code> → <strong>Deploy</strong> →
     <strong>New deployment</strong> → <strong>Web app</strong>:</p>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Setting</th><th>Value</th></tr>
       <tr><td><strong>Execute as</strong></td><td><strong>Me</strong> (your account) — required; all calendar operations run as you</td></tr>
       <tr><td><strong>Who has access</strong></td><td><strong>Anyone within [your domain]</strong> (recommended for staff) — or <strong>Anyone with a Google Account</strong> if you need outside users (see Security notes)</td></tr>
     </table>
+  </div>
     <p>On first run Google asks for authorization (Calendar access, send email). Accept. Copy the <strong>Web app URL</strong>.</p>
   </div>
 
   <div class="step">
     <h3>Step 6 — Setup Wizard</h3>
     <p>Open the Web app URL. Since the system is not installed yet, the <strong>Setup Wizard</strong> appears:</p>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Field</th><th>Note</th></tr>
       <tr><td>App / System name</td><td>e.g. "Takwim SK Contoh"</td></tr>
       <tr><td>Organisation name</td><td>e.g. "SK Contoh, Kuala Lumpur"</td></tr>
@@ -318,6 +336,7 @@ cd takwim-digital</code></pre>
       <tr><td>Theme colour</td><td>hex, e.g. <code>#0b6ef3</code></td></tr>
       <tr><td>Footer text / Icon URL</td><td>optional; icon URL must be <code>https://</code></td></tr>
     </table>
+  </div>
     <p>Press <strong>Test Connection</strong> → the system verifies calendar access + mail
     quota → <strong>Install</strong>. Reload → you are auto-logged in as Super Admin.</p>
   </div>
@@ -329,12 +348,14 @@ cd takwim-digital</code></pre>
       <li>New accounts are <strong>pending</strong>.</li>
       <li>Super Admin → <strong>System Settings → Users</strong> → approve + assign a role.</li>
     </ol>
-    <table>
+    <div class="tscroll">
+      <table>
       <tr><th>Role</th><th class="c">View</th><th class="c">Create</th><th class="c">Edit</th><th class="c">Delete</th><th class="c">Manage users</th><th class="c">Audit log</th><th class="c">"School Holiday" category</th></tr>
       <tr><td><strong>admin</strong> (Super Admin)</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
       <tr><td><strong>editor</strong></td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
       <tr><td><strong>viewer</strong></td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
     </table>
+  </div>
   </div>
 
   <h2>Updating later</h2>
@@ -359,7 +380,8 @@ cd takwim-digital</code></pre>
   </div>
 
   <h2>Troubleshooting</h2>
-  <table>
+  <div class="tscroll">
+    <table>
     <tr><th>Symptom</th><th>Cause / fix</th></tr>
     <tr><td>"Sistem belum dipasang"</td><td>Wizard not finished — open the <strong>Web app URL</strong>, not the Apps Script editor.</td></tr>
     <tr><td>"Calendar ID tidak dapat diakses"</td><td>The deployer account isn't subscribed to / has no access to that calendar. Add it to that account first.</td></tr>
@@ -367,6 +389,7 @@ cd takwim-digital</code></pre>
     <tr><td>Domain web app 404 / access denied</td><td>For Workspace domains with <code>access: DOMAIN</code>, use the URL form <code>https://script.google.com/a/macros/YOUR_DOMAIN/s/DEPLOYMENT_ID/exec</code>.</td></tr>
     <tr><td>Approval emails not arriving</td><td>MailApp daily quota (consumer Gmail = 100/day) exhausted, or in the spam folder.</td></tr>
   </table>
+  </div>
 
 </section>
 
