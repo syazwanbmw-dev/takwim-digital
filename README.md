@@ -10,6 +10,15 @@ salinan anda sendiri dalam beberapa minit.
 
 ---
 
+## 👩‍🏫 Panduan mudah untuk cikgu (tanpa coding)
+
+**➡️ https://syazwanbmw-dev.github.io/takwim-digital/**
+
+Salin & tampal kod terus ke Google Apps Script — ada butang **Salin** sekali klik,
+siap dalam ± 15 minit. Sumber: [`docs/PANDUAN-GURU.md`](docs/PANDUAN-GURU.md).
+
+---
+
 ## ✨ Ciri / Features
 
 - **Sumber data = Google Calendar** — setiap aktiviti ialah satu Calendar event; guna

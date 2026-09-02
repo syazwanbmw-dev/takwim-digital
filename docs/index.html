@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pasang Takwim Digital untuk Sekolah Anda</title>
+
+<meta name="description" content="Panduan langkah demi langkah untuk cikgu — salin & tampal kod ke Google Apps Script. Percuma, tak perlu tahu coding, siap dalam 15 minit.">
+<meta property="og:title" content="Pasang Takwim Digital untuk Sekolah Anda">
+<meta property="og:description" content="Panduan untuk cikgu — salin & tampal kod ke Google Apps Script. Percuma, tak perlu tahu coding, siap dalam 15 minit.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://syazwanbmw-dev.github.io/takwim-digital/">
+<meta name="twitter:card" content="summary">
+
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#ffffff; --ink:#1e293b; --muted:#51607a;
+    --line:#e2e8f0; --accent:#0b6ef3; --accent-ink:#0b4fb0; --accent-soft:#e8f1ff;
+    --code-bg:#0f172a; --code-ink:#e6ecf7;
+    --warn-bg:#fff7ed; --warn-line:#fdba74; --ok-bg:#ecfdf3; --ok-line:#6ee7a8; --ok-ink:#047a42;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b1220; --card:#111a2e; --ink:#e7ebf3; --muted:#a6b0c4;
+      --line:#243049; --accent:#4f9bff; --accent-ink:#9cc6ff; --accent-soft:#16233c;
+      --code-bg:#060b16; --code-ink:#dbe4f3;
+      --warn-bg:#2b1d0e; --warn-line:#a9741f; --ok-bg:#0e2417; --ok-line:#2f6b45; --ok-ink:#5fd08c;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    background:linear-gradient(135deg,var(--accent),#4f46e5); color:#fff;
+    padding:34px 20px 30px;
+  }
+  .wrap{max-width:760px; margin:0 auto; padding:0 20px}
+  header .wrap{padding:0 20px}
+  header h1{margin:0 0 8px; font-size:26px; line-height:1.25}
+  header p{margin:0; opacity:.92; font-size:15px}
+  main{padding:26px 0 80px}
+  .lead{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:18px 20px; margin:0 0 22px;
+  }
+  .lead p{margin:8px 0}
+  .pill{
+    display:inline-block; background:var(--accent-soft); color:var(--accent-ink);
+    border-radius:999px; padding:3px 12px; font-size:13px; font-weight:600; margin-bottom:6px;
+  }
+  h2{font-size:20px; margin:34px 0 6px}
+  h2 .n{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; border-radius:50%; background:var(--accent); color:#fff;
+    font-size:15px; margin-right:9px; vertical-align:2px;
+  }
+  h3{font-size:16px; margin:20px 0 6px}
+  p{margin:10px 0}
+  a{color:var(--accent-ink)}
+  ol,ul{padding-left:22px; margin:10px 0}
+  li{margin:6px 0}
+  kbd{
+    background:var(--card); border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:5px; padding:1px 6px; font-size:13px; font-family:inherit; white-space:nowrap;
+  }
+  code{
+    background:rgba(129,150,180,.18); padding:1.5px 5px; border-radius:4px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px;
+    overflow-wrap:anywhere; word-break:break-word;
+  }
+  pre{
+    background:var(--code-bg); color:var(--code-ink); padding:14px 16px;
+    border-radius:10px; overflow-x:auto; font-size:13px; line-height:1.5;
+  }
+  pre code{background:none; padding:0; color:inherit}
+  .step{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:6px 20px 18px; margin:14px 0;
+  }
+  .tscroll{overflow-x:auto; -webkit-overflow-scrolling:touch; margin:14px 0; max-width:100%}
+  table{border-collapse:collapse; width:100%; font-size:14px}
+  .tscroll table{margin:0}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; overflow-wrap:anywhere}
+  th{background:rgba(129,150,180,.12); font-weight:600}
+  .note{background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:10px; padding:11px 15px; margin:14px 0; font-size:14.5px}
+  .copybox{
+    background:var(--accent-soft); border:1px solid var(--line); border-radius:12px;
+    padding:14px 16px; margin:14px 0;
+  }
+  .copybox .row{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+  button.copybtn{
+    font:inherit; font-size:15px; font-weight:700; cursor:pointer;
+    background:var(--accent); color:#fff; border:0; border-radius:10px;
+    padding:11px 18px; min-height:44px;
+  }
+  button.copybtn:disabled{opacity:.5; cursor:not-allowed}
+  button.copybtn:active{transform:translateY(1px)}
+  .copybox .status{font-size:13.5px; color:var(--ok-ink); font-weight:600}
+  .copybox .status.err{color:#b91c1c}
+  .copybox .meta{display:block; font-size:12.5px; color:var(--muted); margin-top:8px}
+  .copybox a.fallback{font-size:13.5px; font-weight:600}
+  footer{
+    border-top:1px solid var(--line); margin-top:40px; padding-top:20px;
+    color:var(--muted); font-size:13.5px;
+  }
+  @media print{ header{background:none; color:#000} button.copybtn{display:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1>📅 Pasang Takwim Digital untuk sekolah anda</h1>
+    <p>Untuk cikgu — tak perlu tahu coding. Salin kod, tampal ke Google Apps Script. ± 15 minit.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="lead">
+    <span class="pill">PERCUMA · guna akaun Google anda sendiri</span>
+    <p>Takwim Digital ialah papan pemuka kalendar aktiviti sekolah. Ia berjalan di
+    <strong>Google Apps Script</strong> dan menyimpan data terus dalam
+    <strong>Google Calendar</strong> — tiada pangkalan data, tiada pelayan, tiada bayaran.</p>
+    <p>Panduan ini menggunakan cara paling mudah: <strong>salin &amp; tampal</strong>. Butang
+    <em>Salin</em> di bawah mengambil kod terkini terus dari repo, jadi anda sentiasa dapat versi terbaharu.</p>
+  </div>
+
+  <h2>Apa yang anda perlukan</h2>
+  <ul>
+    <li><strong>Akaun Google</strong> — elok guna akaun sekolah (Workspace / GAFE / DELIMa).
+      Akaun ini menjadi <strong>Super Admin</strong> sistem anda.</li>
+    <li><strong>Satu Google Calendar</strong> untuk takwim sekolah (sedia ada atau buat baharu — Langkah 1).</li>
+    <li>Lebih kurang <strong>15 minit</strong>.</li>
+  </ul>
+
+  <div class="step">
+    <h2><span class="n">1</span>Sediakan Google Calendar</h2>
+    <p>Jika sekolah sudah ada kalendar khas takwim, langkau langkah ini.</p>
+    <ol>
+      <li>Buka <a href="https://calendar.google.com" target="_blank" rel="noopener">calendar.google.com</a>.</li>
+      <li>Sebelah kiri → <strong>Other calendars</strong> → tanda <strong>+</strong> → <strong>Create new calendar</strong>.</li>
+      <li>Nama: contoh <em>"Takwim SK Contoh"</em> → <strong>Create calendar</strong>.</li>
+    </ol>
+    <p>Kita perlukan <strong>Calendar ID</strong> kalendar ini nanti (Langkah 7).</p>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">2</span>Buka Google Apps Script</h2>
+    <ol>
+      <li>Pergi ke <a href="https://script.google.com" target="_blank" rel="noopener">script.google.com</a>.</li>
+      <li>Klik <strong>New project</strong> (kiri atas).</li>
+      <li>Projek baharu terbuka dengan satu fail bernama <code>Code.gs</code>.</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">3</span>Masukkan kod bahagian 1 — <code>Code.gs</code></h2>
+    <ol>
+      <li>Klik dalam kotak kod <code>Code.gs</code> → <kbd>Ctrl</kbd>+<kbd>A</kbd> → <kbd>Delete</kbd> (kosongkan).</li>
+      <li>Klik butang <strong>Salin</strong> di bawah.</li>
+      <li>Kembali ke Apps Script, klik dalam <code>Code.gs</code> → <kbd>Ctrl</kbd>+<kbd>V</kbd> (tampal).</li>
+    </ol>
+    <div class="copybox" data-file="Code.js" data-target="Code.gs">
+      <div class="row">
+        <button class="copybtn" type="button">📋 Salin isi Code.gs</button>
+        <span class="status">Sedang muat kod…</span>
+        <a class="fallback" href="https://github.com/syazwanbmw-dev/takwim-digital/blob/master/Code.js" target="_blank" rel="noopener" hidden>Buka fail di GitHub →</a>
+      </div>
+      <span class="meta"></span>
+    </div>
+    <div class="note">Nama fail di GitHub ialah <code>Code.js</code>, di Apps Script <code>Code.gs</code> —
+      <strong>tidak mengapa</strong>, isinya sama. Jangan ubah apa-apa; tampal seadanya.</div>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">4</span>Masukkan kod bahagian 2 — <code>Index.html</code></h2>
+    <ol>
+      <li>Panel <strong>Files</strong> (kiri) → tanda <strong>+</strong> → <strong>HTML</strong>.</li>
+      <li>Namakan fail: <strong><code>Index</code></strong> — huruf <strong>I besar</strong>, <strong>jangan</strong> taip <code>.html</code>. Tekan Enter.</li>
+      <li>Fail terbuka dengan kandungan contoh → <kbd>Ctrl</kbd>+<kbd>A</kbd> → <kbd>Delete</kbd>.</li>
+      <li>Klik <strong>Salin</strong> di bawah → kembali → klik dalam <code>Index.html</code> → <kbd>Ctrl</kbd>+<kbd>V</kbd>.</li>
+    </ol>
+    <div class="copybox" data-file="Index.html" data-target="Index.html">
+      <div class="row">
+        <button class="copybtn" type="button">📋 Salin isi Index.html</button>
+        <span class="status">Sedang muat kod…</span>
+        <a class="fallback" href="https://github.com/syazwanbmw-dev/takwim-digital/blob/master/Index.html" target="_blank" rel="noopener" hidden>Buka fail di GitHub →</a>
+      </div>
+      <span class="meta"></span>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">5</span>Tetapkan zon waktu — <code>appsscript.json</code></h2>
+    <ol>
+      <li>Klik <strong>⚙️ Project Settings</strong> (panel kiri).</li>
+      <li>Tandakan <strong>"Show 'appsscript.json' manifest file in editor"</strong>.</li>
+      <li>Kembali ke <strong>Editor</strong> (<code>&lt; &gt;</code>) → buka <code>appsscript.json</code> →
+        <kbd>Ctrl</kbd>+<kbd>A</kbd> → <kbd>Delete</kbd>.</li>
+      <li>Klik <strong>Salin</strong> di bawah → tampal → <kbd>Ctrl</kbd>+<kbd>S</kbd> (simpan).</li>
+    </ol>
+    <div class="copybox" data-file="__manifest__" data-target="appsscript.json">
+      <div class="row">
+        <button class="copybtn" type="button">📋 Salin isi appsscript.json</button>
+        <span class="status"></span>
+      </div>
+    </div>
+<pre><code>{
+  "timeZone": "Asia/Kuala_Lumpur",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8"
+}</code></pre>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">6</span>Deploy (terbitkan) sebagai laman web</h2>
+    <ol>
+      <li>Kanan atas → <strong>Deploy</strong> → <strong>New deployment</strong>.</li>
+      <li>Ikon <strong>⚙️</strong> di sebelah <em>"Select type"</em> → pilih <strong>Web app</strong>.</li>
+      <li>Isi:
+        <ul>
+          <li><strong>Description:</strong> <code>v1</code></li>
+          <li><strong>Execute as:</strong> <strong>Me</strong></li>
+          <li><strong>Who has access:</strong>
+            <br>• Akaun <strong>sekolah (Workspace)</strong> → <strong>Anyone within [nama sekolah]</strong>
+            <br>• <strong>Gmail biasa</strong> → <strong>Anyone with a Google Account</strong> (anda luluskan setiap guru — Langkah 9)</li>
+        </ul>
+      </li>
+      <li>Klik <strong>Deploy</strong>. Google minta kebenaran:
+        <ul>
+          <li><strong>Authorize access</strong> → pilih akaun anda</li>
+          <li>Skrin <em>"Google hasn't verified this app"</em> → <strong>Advanced</strong> →
+            <strong>Go to … (unsafe)</strong> → <strong>Allow</strong></li>
+          <li>⚠️ Ini <strong>normal</strong> — anda yang pasang skrip ini sendiri.</li>
+        </ul>
+      </li>
+      <li><strong>Salin URL Web app</strong> yang dipaparkan — inilah alamat sistem takwim anda.</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">7</span>Dapatkan Calendar ID</h2>
+    <ol>
+      <li>Buka <a href="https://calendar.google.com" target="_blank" rel="noopener">calendar.google.com</a>.</li>
+      <li>Sebelah kiri → kalendar takwim anda → <strong>⋮</strong> → <strong>Settings and sharing</strong>.</li>
+      <li>Skrol ke <strong>Integrate calendar</strong> → salin <strong>Calendar ID</strong>
+        (rupa <code>abc123@group.calendar.google.com</code>; kalendar utama = alamat e-mel anda).</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">8</span>Siapkan sistem (Setup Wizard)</h2>
+    <ol>
+      <li>Buka <strong>URL Web app</strong> (dari Langkah 6).</li>
+      <li>Borang <strong>Setup</strong> muncul. Isi:</li>
+    </ol>
+    <div class="tscroll">
+      <table>
+        <tr><th>Medan</th><th>Contoh / nota</th></tr>
+        <tr><td>Nama Sistem / Aplikasi</td><td><em>Takwim SK Contoh</em></td></tr>
+        <tr><td>Nama Organisasi</td><td><em>SK Contoh, Kuala Lumpur</em></td></tr>
+        <tr><td>Nama Pendek</td><td><em>Takwim</em> (label menu)</td></tr>
+        <tr><td>Google Calendar ID</td><td>tampal nilai dari Langkah 7</td></tr>
+        <tr><td>E-mel Super Admin</td><td><strong>e-mel akaun yang anda guna sekarang</strong> — mesti sama</td></tr>
+        <tr><td>Warna Tema / Footer / URL Ikon</td><td>pilihan</td></tr>
+      </table>
+    </div>
+    <ol start="3">
+      <li>Klik <strong>Test Connection</strong>. Jika hijau → <strong>Install</strong>.</li>
+      <li><strong>Muat semula</strong> halaman → anda masuk sebagai <strong>Super Admin</strong>. ✅</li>
+    </ol>
+  </div>
+
+  <div class="step">
+    <h2><span class="n">9</span>Jemput guru lain</h2>
+    <ol>
+      <li>Guru lain buka <strong>URL yang sama</strong> → daftar (nama, jawatan, unit). Tiada kata laluan, tiada OTP.</li>
+      <li>Akaun mereka berstatus <strong>"menunggu kelulusan"</strong>.</li>
+      <li>Anda → <strong>System Settings → Users</strong> → <strong>Luluskan</strong> + pilih peranan:</li>
+    </ol>
+    <div class="tscroll">
+      <table>
+        <tr><th>Peranan</th><th>Boleh buat</th></tr>
+        <tr><td><strong>admin</strong></td><td>semua — termasuk urus pengguna &amp; kategori "Cuti Sekolah"</td></tr>
+        <tr><td><strong>editor</strong></td><td>tambah / ubah aktiviti takwim</td></tr>
+        <tr><td><strong>viewer</strong></td><td>lihat sahaja</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>Bila ada versi baharu — cara kemas kini</h2>
+  <ol>
+    <li>Buka projek Apps Script anda.</li>
+    <li>Salin semula <code>Code.gs</code> dan <code>Index.html</code> (butang di Langkah 3 &amp; 4), ganti isi lama sepenuhnya.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>S</kbd>.</li>
+    <li><strong>Deploy → Manage deployments</strong> → ✏️ edit → <strong>Version: New version</strong> → <strong>Deploy</strong>.</li>
+  </ol>
+  <p>URL Web app anda <strong>kekal sama</strong> selepas kemas kini.</p>
+
+  <h2>Masalah biasa</h2>
+  <div class="tscroll">
+    <table>
+      <tr><th>Masalah</th><th>Sebab &amp; penyelesaian</th></tr>
+      <tr><td><em>"Sistem belum dipasang"</em></td><td>Setup Wizard belum siap. Buka <strong>URL Web app</strong>, bukan editor Apps Script.</td></tr>
+      <tr><td><em>"Calendar ID tidak dapat diakses"</em></td><td>Calendar ID salah, atau akaun anda tiada akses ke kalendar itu. Semak Langkah 7.</td></tr>
+      <tr><td><em>"E-mel Super Admin mesti sama…"</em></td><td>E-mel dalam borang ≠ akaun yang deploy. Guna akaun yang sama.</td></tr>
+      <tr><td>Skrin <em>"Google hasn't verified this app"</em></td><td>Normal untuk skrip sendiri. <strong>Advanced → Go to … (unsafe) → Allow</strong>.</td></tr>
+      <tr><td>Guru lain → <em>"You need access"</em></td><td><em>Who has access</em> terlalu ketat. <strong>Manage deployments → edit → tukar akses → New version → Deploy</strong>.</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    <p>Untuk yang biasa dengan <code>clasp</code> / Git — panduan teknikal dwibahasa:
+      <a href="https://github.com/syazwanbmw-dev/takwim-digital/blob/master/SETUP.md" target="_blank" rel="noopener">SETUP.md</a></p>
+    <p>Kod sumber: <a href="https://github.com/syazwanbmw-dev/takwim-digital" target="_blank" rel="noopener">github.com/syazwanbmw-dev/takwim-digital</a>
+      · Lesen <strong>MIT</strong> — guna &amp; ubah suai bebas.</p>
+  </footer>
+
+</main>
+
+<script>
+  var RAW = 'https://raw.githubusercontent.com/syazwanbmw-dev/takwim-digital/master/';
+  var MANIFEST = '{\n  "timeZone": "Asia/Kuala_Lumpur",\n  "dependencies": {},\n  "exceptionLogging": "STACKDRIVER",\n  "runtimeVersion": "V8"\n}\n';
+
+  function fmtBytes(n){
+    if(n < 1024) return n + ' B';
+    return (n/1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+  }
+
+  document.querySelectorAll('.copybox').forEach(function(box){
+    var file    = box.getAttribute('data-file');
+    var target  = box.getAttribute('data-target');
+    var btn     = box.querySelector('.copybtn');
+    var status  = box.querySelector('.status');
+    var meta    = box.querySelector('.meta');
+    var fb      = box.querySelector('.fallback');
+    var payload = null;
+
+    function ready(text){
+      payload = text;
+      status.textContent = '';
+      status.classList.remove('err');
+      if(meta) meta.textContent = fmtBytes(text.length) + ' · ' + text.split('\n').length + ' baris';
+    }
+    function fail(){
+      btn.disabled = true;
+      status.textContent = 'Tak dapat muat automatik — guna pautan GitHub.';
+      status.classList.add('err');
+      if(fb) fb.hidden = false;
+    }
+
+    if(file === '__manifest__'){
+      ready(MANIFEST);
+    } else {
+      fetch(RAW + file, {cache:'no-store'})
+        .then(function(r){ if(!r.ok) throw new Error(r.status); return r.text(); })
+        .then(ready)
+        .catch(fail);
+    }
+
+    btn.addEventListener('click', function(){
+      if(payload == null) return;
+      navigator.clipboard.writeText(payload).then(function(){
+        status.textContent = '✓ Disalin! Sekarang tampal (Ctrl+V) dalam ' + target;
+        status.classList.remove('err');
+        btn.textContent = '✓ Sudah disalin';
+        setTimeout(function(){ btn.textContent = '📋 Salin lagi'; }, 2500);
+      }).catch(function(){
+        status.textContent = 'Pelayar sekat salinan automatik — guna pautan GitHub.';
+        status.classList.add('err');
+        if(fb) fb.hidden = false;
+      });
+    });
+  });
+</script>
+</body>
+</html>
