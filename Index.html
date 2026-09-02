@@ -484,9 +484,9 @@ function saveSettingsUI(btn){
 }
 function attr(s=''){return esc(s).replace(/"/g,'&quot;')}
 
-// Zero-klik: cuba log masuk guna sesi Google (access:DOMAIN dah paksa guru
-// login moe-dl.edu.my sebelum sampai sini pun). Dipanggil bila tiada TOKEN
-// localStorage (pengguna baharu) ATAU token lama dah tamat (restoreSessionUI).
+// Zero-klik: cuba log masuk guna sesi Google (bila access:DOMAIN, pengguna wajib
+// login domain Google Workspace anda dulu sebelum sampai sini). Dipanggil bila
+// tiada TOKEN localStorage (pengguna baharu) ATAU token lama tamat (restoreSessionUI).
 const AUTH_STATUS_MSG={
   pending:'Permohonan anda masih menunggu kelulusan Super Admin.',
   rejected:'Permohonan akses anda tidak diluluskan. Hubungi Super Admin.',

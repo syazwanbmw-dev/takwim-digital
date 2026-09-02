@@ -1,3 +1,9 @@
+# clasp — local project link & auth (each deployer uses their own)
+.clasp.json
 .clasprc.json
+
+# node
 node_modules/
+
+# logs
 *.log

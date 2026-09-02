@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panduan Pemasangan — Takwim Digital</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1e293b; --muted:#475569;
+    --line:#e2e8f0; --accent:#0b6ef3; --accent-ink:#0b4fb0;
+    --code-bg:#0f172a; --code-ink:#e2e8f0; --warn-bg:#fff7ed; --warn-line:#fdba74;
+    --ok-bg:#f0fdf4; --ok-line:#86efac;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0b1220; --card:#111a2e; --ink:#e5e9f0; --muted:#a3adc2;
+      --line:#243049; --accent:#4f9bff; --accent-ink:#8fc0ff;
+      --code-bg:#060b16; --code-ink:#dbe4f3; --warn-bg:#2b1d0e; --warn-line:#a9741f;
+      --ok-bg:#0e2417; --ok-line:#2f6b45;
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-text-size-adjust:100%;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--card); border-bottom:1px solid var(--line);
+    padding:14px 20px; display:flex; flex-wrap:wrap; gap:12px 16px;
+    align-items:center; justify-content:space-between;
+  }
+  header h1{font-size:18px; margin:0; display:flex; align-items:center; gap:8px}
+  .lang{display:flex; gap:6px}
+  .lang button{
+    font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    padding:6px 12px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--muted);
+  }
+  .lang button.active{background:var(--accent); border-color:var(--accent); color:#fff}
+  main{max-width:860px; margin:0 auto; padding:28px 20px 80px}
+  section.lang-block{display:none}
+  section.lang-block.show{display:block}
+  h2{font-size:22px; margin:36px 0 10px; padding-top:8px; border-top:1px solid var(--line)}
+  h2:first-child{border-top:0; margin-top:0}
+  h3{font-size:17px; margin:24px 0 8px}
+  p{margin:10px 0}
+  a{color:var(--accent-ink)}
+  ul,ol{padding-left:22px; margin:10px 0}
+  li{margin:5px 0}
+  code{
+    background:rgba(148,163,184,.18); padding:1.5px 5px; border-radius:4px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px;
+  }
+  pre{
+    background:var(--code-bg); color:var(--code-ink); padding:14px 16px;
+    border-radius:10px; overflow-x:auto; font-size:13.5px; line-height:1.55;
+  }
+  pre code{background:none; padding:0; color:inherit; font-size:inherit}
+  table{border-collapse:collapse; width:100%; margin:14px 0; font-size:14.5px}
+  th,td{border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:rgba(148,163,184,.12); font-weight:600}
+  td.c,th.c{text-align:center}
+  .note{
+    background:var(--warn-bg); border:1px solid var(--warn-line);
+    border-radius:10px; padding:12px 16px; margin:16px 0;
+  }
+  .ok{
+    background:var(--ok-bg); border:1px solid var(--ok-line);
+    border-radius:10px; padding:12px 16px; margin:16px 0;
+  }
+  .step{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:4px 18px 14px; margin:16px 0;
+  }
+  footer{max-width:860px; margin:0 auto; padding:0 20px 60px; color:var(--muted); font-size:13px}
+  @media print{
+    header{position:static}
+    .lang{display:none}
+    section.lang-block{display:block !important}
+    a{color:inherit}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>📅 Takwim Digital — Panduan Pemasangan</h1>
+  <div class="lang">
+    <button id="btn-ms" class="active" onclick="setLang('ms')">Bahasa Melayu</button>
+    <button id="btn-en" onclick="setLang('en')">English</button>
+  </div>
+</header>
+
+<main>
+
+<!-- ================= BAHASA MELAYU ================= -->
+<section id="lang-ms" class="lang-block show">
+
+  <h2>Ringkasan</h2>
+  <p><strong>Deploy versi anda sendiri dari sifar.</strong> Tiada pangkalan data untuk
+  disediakan — sistem guna Google Calendar sebagai sumber data dan Apps Script Script
+  Properties untuk tetapan.</p>
+
+  <table>
+    <tr><th>Lapisan</th><th>Guna apa</th></tr>
+    <tr><td>Runtime</td><td>Google Apps Script (standalone, V8)</td></tr>
+    <tr><td>"Pangkalan data" acara</td><td><strong>Google Calendar</strong> — setiap aktiviti = satu Calendar event</td></tr>
+    <tr><td>Tetapan, sesi, pengguna, audit</td><td><code>PropertiesService</code>: <code>APP_CONFIG_V3</code>, <code>PPD_USERS_V23</code>, <code>PPD_SESSIONS_V23</code>, <code>PPD_AUDIT_V23</code></td></tr>
+    <tr><td>Cuti umum</td><td>Kalendar awam Google "Holidays in Malaysia" (baca sahaja, sudah di-hardcode)</td></tr>
+    <tr><td>Frontend</td><td>Satu fail <code>Index.html</code> (HTML + CSS + JS, tiada framework)</td></tr>
+    <tr><td>Identiti</td><td>Sesi Google sahaja — tiada kata laluan disimpan</td></tr>
+  </table>
+
+  <h2>Prasyarat</h2>
+  <ol>
+    <li><strong>Akaun Google</strong> (peribadi atau Workspace). Akaun ini jadi pemilik skrip <strong>dan</strong> Super Admin pertama.</li>
+    <li><strong>Node.js 14+</strong> dan <strong>npm</strong> — untuk <code>clasp</code>.</li>
+    <li><strong>Satu Google Calendar</strong> yang akaun di atas boleh akses/urus. Semua aktiviti takwim ditulis ke sini.</li>
+    <li><strong><code>clasp</code></strong>: <pre><code>npm install -g @google/clasp</code></pre></li>
+    <li><strong>Aktifkan Apps Script API</strong> (sekali sahaja): buka
+      <a href="https://script.google.com/home/usersettings">script.google.com/home/usersettings</a>
+      → hidupkan <strong>Google Apps Script API</strong>.</li>
+  </ol>
+
+  <div class="step">
+    <h3>Langkah 1 — Ambil kod</h3>
+    <pre><code>git clone https://github.com/syazwanbmw-dev/takwim-digital.git
+cd takwim-digital</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 2 — Log masuk clasp</h3>
+    <pre><code>clasp login</code></pre>
+    <p>Tetingkap browser terbuka → benarkan akses. Token disimpan di
+    <code>~/.clasprc.json</code> (fail ini <strong>tidak</strong> masuk repo).</p>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 3 — Cipta projek Apps Script anda sendiri</h3>
+    <p><code>.clasp.json</code> repo asal <strong>tidak disertakan</strong>. Pilih <strong>satu</strong>:</p>
+    <p><strong>A. Cipta projek baharu (disyorkan)</strong></p>
+    <pre><code>clasp create --type webapp --title "Takwim Digital"</code></pre>
+    <p>Jana <code>.clasp.json</code> baharu (mengandungi <code>scriptId</code> anda). Jika
+    <code>clasp</code> cuba tulis ganti <code>appsscript.json</code>, <strong>kekalkan versi repo</strong>.</p>
+    <p><strong>B. Guna scriptId sedia ada</strong></p>
+    <pre><code>cp .clasp.json.example .clasp.json</code></pre>
+    <p>kemudian edit <code>.clasp.json</code>, ganti <code>PASTE_YOUR_OWN_APPS_SCRIPT_ID_HERE</code>
+    dengan scriptId projek anda (di <strong>Project Settings</strong> dalam editor Apps Script).</p>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 4 — Hantar kod</h3>
+    <pre><code>clasp push -f</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 5 — Deploy sebagai Web App</h3>
+    <pre><code>clasp deploy --description "v1"</code></pre>
+    <p>atau melalui editor: <code>clasp open</code> → <strong>Deploy</strong> →
+    <strong>New deployment</strong> → jenis <strong>Web app</strong>:</p>
+    <table>
+      <tr><th>Tetapan</th><th>Nilai</th></tr>
+      <tr><td><strong>Execute as</strong></td><td><strong>Me</strong> (akaun anda) — wajib; semua operasi kalendar jalan sebagai anda</td></tr>
+      <tr><td><strong>Who has access</strong></td><td><strong>Anyone within [domain anda]</strong> (disyorkan untuk staf) — atau <strong>Anyone with a Google Account</strong> jika perlu orang luar (lihat Nota Keselamatan)</td></tr>
+    </table>
+    <p>Kali pertama, Google minta kebenaran (akses Calendar, hantar email). Terima. Salin <strong>URL Web app</strong>.</p>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 6 — Setup Wizard</h3>
+    <p>Buka URL Web app. Kerana sistem belum dipasang, <strong>Setup Wizard</strong> muncul:</p>
+    <table>
+      <tr><th>Medan</th><th>Nota</th></tr>
+      <tr><td>Nama Sistem / Aplikasi</td><td>cth. "Takwim SK Contoh"</td></tr>
+      <tr><td>Nama Organisasi</td><td>cth. "SK Contoh, Kuala Lumpur"</td></tr>
+      <tr><td>Nama Pendek</td><td>label sidebar, cth. "Takwim"</td></tr>
+      <tr><td><strong>Google Calendar ID</strong></td><td>Google Calendar → <strong>Settings</strong> kalendar berkenaan → <strong>Integrate calendar</strong> → <strong>Calendar ID</strong> (rupa <code>xxxx@group.calendar.google.com</code>, atau alamat email anda untuk kalendar utama)</td></tr>
+      <tr><td><strong>Email Super Admin</strong></td><td><strong>mesti sama</strong> dengan akaun Google yang deploy skrip ini</td></tr>
+      <tr><td>Warna Tema</td><td>kod hex, cth. <code>#0b6ef3</code></td></tr>
+      <tr><td>Teks Footer / URL Ikon</td><td>pilihan; URL ikon mesti <code>https://</code></td></tr>
+    </table>
+    <p>Tekan <strong>Test Connection</strong> → sistem sahkan kalendar boleh diakses + kuota
+    email ada → <strong>Install</strong>. Muat semula → anda auto-login sebagai Super Admin.</p>
+  </div>
+
+  <div class="step">
+    <h3>Langkah 7 — Luluskan pengguna</h3>
+    <ol>
+      <li>Staf lain buka URL yang sama → <strong>daftar satu langkah</strong> (nama, jawatan, unit). Tiada OTP.</li>
+      <li>Akaun baharu jadi <strong>pending</strong>.</li>
+      <li>Super Admin → <strong>System Settings → Users</strong> → luluskan + beri peranan.</li>
+    </ol>
+    <table>
+      <tr><th>Peranan</th><th class="c">Lihat</th><th class="c">Cipta</th><th class="c">Edit</th><th class="c">Padam</th><th class="c">Urus pengguna</th><th class="c">Log audit</th><th class="c">Kategori "Cuti Sekolah"</th></tr>
+      <tr><td><strong>admin</strong> (Super Admin)</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
+      <tr><td><strong>editor</strong></td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+      <tr><td><strong>viewer</strong></td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    </table>
+  </div>
+
+  <h2>Kemas kini kemudian</h2>
+  <pre><code>clasp push -f</code></pre>
+  <p>kemudian <strong>Deploy → Manage deployments → (edit) → Version: New version → Deploy</strong>.
+  Untuk pembangunan, deployment <strong><code>@HEAD</code></strong> auto-ikut setiap <code>clasp push</code>.</p>
+
+  <h2>Nota Keselamatan</h2>
+  <div class="ok">
+    <ul>
+      <li><strong><code>executeAs: USER_DEPLOYING</code></strong> — semua tulisan ke Calendar jalan sebagai <em>anda</em> (deployer), bukan pelawat. Sistem peranan app yang kawal siapa boleh buat apa.</li>
+      <li><strong>Identiti = email sesi Google sahaja.</strong> <code>access: DOMAIN</code> menjamin pelawat sudah login domain sah sebelum app dimuatkan. Setiap fungsi server disemak <code>requireSession_(token, kebenaran)</code> — tiada token sah = tiada data.</li>
+      <li><strong>Tiada pangkalan data, tiada secret dalam kod.</strong> Semua tetapan dalam Script Properties. Repo ini selamat untuk jadi public.</li>
+      <li>Kalendar cuti umum Malaysia adalah awam &amp; baca-sahaja — selamat di-hardcode.</li>
+    </ul>
+  </div>
+  <div class="note">
+    <strong>Jangan</strong> tukar akses kepada <code>Anyone with a Google Account</code> melainkan
+    anda faham: orang luar boleh daftar (mereka jadi <em>pending</em>, tidak nampak apa-apa
+    sehingga diluluskan), tetapi ini meluaskan pendedahan. <strong>Jangan sekali-kali</strong>
+    guna <code>Anyone (anonymous)</code> — app tak dapat baca email, tiada siapa boleh log masuk.
+  </div>
+
+  <h2>Menyelesaikan masalah</h2>
+  <table>
+    <tr><th>Gejala</th><th>Punca / penyelesaian</th></tr>
+    <tr><td>"Sistem belum dipasang"</td><td>Wizard belum siap — buka <strong>URL Web app</strong>, bukan editor Apps Script.</td></tr>
+    <tr><td>"Calendar ID tidak dapat diakses"</td><td>Akaun deployer tak langgan / tiada akses ke kalendar itu. Tambah kalendar ke akaun tersebut dulu.</td></tr>
+    <tr><td>"Email Super Admin mesti sama dengan akaun…"</td><td>Email yang ditaip ≠ akaun yang deploy. Guna akaun yang sama.</td></tr>
+    <tr><td>Web app domain 404 / akses ditolak</td><td>Untuk domain Workspace dengan <code>access: DOMAIN</code>, guna bentuk URL <code>https://script.google.com/a/macros/DOMAIN_ANDA/s/DEPLOYMENT_ID/exec</code>.</td></tr>
+    <tr><td>Email kelulusan tak sampai</td><td>Kuota harian MailApp (Gmail biasa = 100/hari) habis, atau tersasar ke folder spam.</td></tr>
+  </table>
+
+</section>
+
+<!-- ================= ENGLISH ================= -->
+<section id="lang-en" class="lang-block">
+
+  <h2>Overview</h2>
+  <p><strong>Deploy your own copy from scratch.</strong> There is no database to provision —
+  the system uses Google Calendar as its data store and Apps Script Script Properties for settings.</p>
+
+  <table>
+    <tr><th>Layer</th><th>What it uses</th></tr>
+    <tr><td>Runtime</td><td>Google Apps Script (standalone, V8)</td></tr>
+    <tr><td>Event "database"</td><td><strong>Google Calendar</strong> — one activity = one Calendar event</td></tr>
+    <tr><td>Settings, sessions, users, audit</td><td><code>PropertiesService</code>: <code>APP_CONFIG_V3</code>, <code>PPD_USERS_V23</code>, <code>PPD_SESSIONS_V23</code>, <code>PPD_AUDIT_V23</code></td></tr>
+    <tr><td>Public holidays</td><td>Google's public "Holidays in Malaysia" calendar (read-only, already hardcoded)</td></tr>
+    <tr><td>Frontend</td><td>Single <code>Index.html</code> (HTML + CSS + JS, no framework)</td></tr>
+    <tr><td>Identity</td><td>Google session only — no passwords stored</td></tr>
+  </table>
+
+  <h2>Prerequisites</h2>
+  <ol>
+    <li>A <strong>Google account</strong> (personal or Workspace). It becomes the script owner <strong>and</strong> the first Super Admin.</li>
+    <li><strong>Node.js 14+</strong> and <strong>npm</strong> — for <code>clasp</code>.</li>
+    <li><strong>One Google Calendar</strong> the account can access/manage. All calendar activities are written here.</li>
+    <li><strong><code>clasp</code></strong>: <pre><code>npm install -g @google/clasp</code></pre></li>
+    <li><strong>Enable the Apps Script API</strong> once: open
+      <a href="https://script.google.com/home/usersettings">script.google.com/home/usersettings</a>
+      → turn on <strong>Google Apps Script API</strong>.</li>
+  </ol>
+
+  <div class="step">
+    <h3>Step 1 — Get the code</h3>
+    <pre><code>git clone https://github.com/syazwanbmw-dev/takwim-digital.git
+cd takwim-digital</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Step 2 — clasp login</h3>
+    <pre><code>clasp login</code></pre>
+    <p>A browser window opens → grant access. The token is stored at
+    <code>~/.clasprc.json</code> (never committed).</p>
+  </div>
+
+  <div class="step">
+    <h3>Step 3 — Create your own Apps Script project</h3>
+    <p>The original <code>.clasp.json</code> is <strong>not included</strong>. Pick <strong>one</strong>:</p>
+    <p><strong>A. New project (recommended)</strong></p>
+    <pre><code>clasp create --type webapp --title "Takwim Digital"</code></pre>
+    <p>Generates a fresh <code>.clasp.json</code> with your <code>scriptId</code>. If
+    <code>clasp</code> tries to overwrite <code>appsscript.json</code>, <strong>keep the repo version</strong>.</p>
+    <p><strong>B. Existing scriptId</strong></p>
+    <pre><code>cp .clasp.json.example .clasp.json</code></pre>
+    <p>then edit <code>.clasp.json</code> and replace <code>PASTE_YOUR_OWN_APPS_SCRIPT_ID_HERE</code>
+    with your project's ID (under <strong>Project Settings</strong> in the Apps Script editor).</p>
+  </div>
+
+  <div class="step">
+    <h3>Step 4 — Push the code</h3>
+    <pre><code>clasp push -f</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Step 5 — Deploy as a Web App</h3>
+    <pre><code>clasp deploy --description "v1"</code></pre>
+    <p>or via the editor: <code>clasp open</code> → <strong>Deploy</strong> →
+    <strong>New deployment</strong> → <strong>Web app</strong>:</p>
+    <table>
+      <tr><th>Setting</th><th>Value</th></tr>
+      <tr><td><strong>Execute as</strong></td><td><strong>Me</strong> (your account) — required; all calendar operations run as you</td></tr>
+      <tr><td><strong>Who has access</strong></td><td><strong>Anyone within [your domain]</strong> (recommended for staff) — or <strong>Anyone with a Google Account</strong> if you need outside users (see Security notes)</td></tr>
+    </table>
+    <p>On first run Google asks for authorization (Calendar access, send email). Accept. Copy the <strong>Web app URL</strong>.</p>
+  </div>
+
+  <div class="step">
+    <h3>Step 6 — Setup Wizard</h3>
+    <p>Open the Web app URL. Since the system is not installed yet, the <strong>Setup Wizard</strong> appears:</p>
+    <table>
+      <tr><th>Field</th><th>Note</th></tr>
+      <tr><td>App / System name</td><td>e.g. "Takwim SK Contoh"</td></tr>
+      <tr><td>Organisation name</td><td>e.g. "SK Contoh, Kuala Lumpur"</td></tr>
+      <tr><td>Short name</td><td>sidebar label, e.g. "Takwim"</td></tr>
+      <tr><td><strong>Google Calendar ID</strong></td><td>Google Calendar → that calendar's <strong>Settings</strong> → <strong>Integrate calendar</strong> → <strong>Calendar ID</strong> (looks like <code>xxxx@group.calendar.google.com</code>, or your email for the primary calendar)</td></tr>
+      <tr><td><strong>Super Admin email</strong></td><td><strong>must match</strong> the Google account that deployed the script</td></tr>
+      <tr><td>Theme colour</td><td>hex, e.g. <code>#0b6ef3</code></td></tr>
+      <tr><td>Footer text / Icon URL</td><td>optional; icon URL must be <code>https://</code></td></tr>
+    </table>
+    <p>Press <strong>Test Connection</strong> → the system verifies calendar access + mail
+    quota → <strong>Install</strong>. Reload → you are auto-logged in as Super Admin.</p>
+  </div>
+
+  <div class="step">
+    <h3>Step 7 — Approve users</h3>
+    <ol>
+      <li>Other staff open the same URL → <strong>one-step registration</strong> (name, position, unit). No OTP.</li>
+      <li>New accounts are <strong>pending</strong>.</li>
+      <li>Super Admin → <strong>System Settings → Users</strong> → approve + assign a role.</li>
+    </ol>
+    <table>
+      <tr><th>Role</th><th class="c">View</th><th class="c">Create</th><th class="c">Edit</th><th class="c">Delete</th><th class="c">Manage users</th><th class="c">Audit log</th><th class="c">"School Holiday" category</th></tr>
+      <tr><td><strong>admin</strong> (Super Admin)</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
+      <tr><td><strong>editor</strong></td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+      <tr><td><strong>viewer</strong></td><td class="c">✅</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td><td class="c">—</td></tr>
+    </table>
+  </div>
+
+  <h2>Updating later</h2>
+  <pre><code>clasp push -f</code></pre>
+  <p>then <strong>Deploy → Manage deployments → (edit) → Version: New version → Deploy</strong>.
+  For development, the <strong><code>@HEAD</code></strong> test deployment auto-follows every <code>clasp push</code>.</p>
+
+  <h2>Security notes</h2>
+  <div class="ok">
+    <ul>
+      <li><strong><code>executeAs: USER_DEPLOYING</code></strong> — all Calendar writes run as <em>you</em> (the deployer), not the visitor. The app's internal role system controls who can do what.</li>
+      <li><strong>Identity = Google session email only.</strong> <code>access: DOMAIN</code> guarantees a verified domain login before the app loads. Every server function is checked with <code>requireSession_(token, permission)</code> — no valid token, no data.</li>
+      <li><strong>No database, no secrets in code.</strong> All config lives in Script Properties. This repo is safe to be public.</li>
+      <li>The Malaysia public-holiday calendar is public and read-only — safe to hardcode.</li>
+    </ul>
+  </div>
+  <div class="note">
+    <strong>Do not</strong> switch access to <code>Anyone with a Google Account</code> unless you
+    understand: outsiders can then register (they become <em>pending</em>, see nothing until
+    approved), but it widens exposure. <strong>Never</strong> use <code>Anyone (anonymous)</code>
+    — the app cannot read an email and no one can sign in.
+  </div>
+
+  <h2>Troubleshooting</h2>
+  <table>
+    <tr><th>Symptom</th><th>Cause / fix</th></tr>
+    <tr><td>"Sistem belum dipasang"</td><td>Wizard not finished — open the <strong>Web app URL</strong>, not the Apps Script editor.</td></tr>
+    <tr><td>"Calendar ID tidak dapat diakses"</td><td>The deployer account isn't subscribed to / has no access to that calendar. Add it to that account first.</td></tr>
+    <tr><td>"Email Super Admin mesti sama dengan akaun…"</td><td>The email you typed ≠ the deploying account. Use the same one.</td></tr>
+    <tr><td>Domain web app 404 / access denied</td><td>For Workspace domains with <code>access: DOMAIN</code>, use the URL form <code>https://script.google.com/a/macros/YOUR_DOMAIN/s/DEPLOYMENT_ID/exec</code>.</td></tr>
+    <tr><td>Approval emails not arriving</td><td>MailApp daily quota (consumer Gmail = 100/day) exhausted, or in the spam folder.</td></tr>
+  </table>
+
+</section>
+
+</main>
+
+<footer>
+  Takwim Digital — <a href="https://github.com/syazwanbmw-dev/takwim-digital">github.com/syazwanbmw-dev/takwim-digital</a> ·
+  MIT License · Sumber panduan: <code>SETUP.md</code>
+</footer>
+
+<script>
+  function setLang(l){
+    document.getElementById('lang-ms').classList.toggle('show', l==='ms');
+    document.getElementById('lang-en').classList.toggle('show', l==='en');
+    document.getElementById('btn-ms').classList.toggle('active', l==='ms');
+    document.getElementById('btn-en').classList.toggle('active', l==='en');
+    document.documentElement.lang = l;
+    try{ localStorage.setItem('takwim-setup-lang', l); }catch(e){}
+    window.scrollTo(0,0);
+  }
+  try{
+    var saved = localStorage.getItem('takwim-setup-lang');
+    if(saved) setLang(saved);
+  }catch(e){}
+</script>
+</body>
+</html>

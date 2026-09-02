@@ -242,9 +242,10 @@ function getPublicConfig() {
 }
 
 /**
- * Sumber kebenaran TUNGGAL untuk identiti guru: sesi Google domain (access:DOMAIN
- * paksa guru dah login moe-dl.edu.my sebelum boleh sampai sini pun). Dibalut
- * try/catch -- gagal-selamat, kalau DELIMa sekat scope email, pulang '' bukan crash.
+ * Sumber kebenaran TUNGGAL untuk identiti pengguna: sesi Google. Bila web app
+ * ditetapkan access:DOMAIN, pengguna wajib login domain Google Workspace anda
+ * dulu sebelum boleh sampai sini. Dibalut try/catch -- gagal-selamat, kalau
+ * dasar domain sekat scope email, pulang '' bukan crash.
  * Disahkan berfungsi utk akaun BUKAN-pemilik skrip via probe manual 2026-08-27.
  */
 function getActiveUserEmail_() {
