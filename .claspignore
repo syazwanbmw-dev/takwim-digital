@@ -1,0 +1,6 @@
+# Hanya fail aplikasi sebenar di-push ke Apps Script.
+# Segala .md, docs/, SETUP.html, LICENSE, dll kekal di repo sahaja.
+**/**
+!appsscript.json
+!Code.js
+!Index.html
