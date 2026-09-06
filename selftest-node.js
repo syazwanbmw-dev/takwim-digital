@@ -59,6 +59,7 @@ function fakeCalendar(events) {
 
 // Rakam SETIAP panggilan fetch. Ujian menuntut BILANGAN dan KANDUNGAN panggilan --
 // "tiada token -> tiada fetch" hanya boleh dibuktikan kalau kita nampak log kosong.
+// Responder boleh pulang { error: 'mesej' } untuk mensimulasikan kegagalan rangkaian.
 function fakeUrlFetch(responder) {
   const calls = [];
   return {
@@ -67,6 +68,7 @@ function fakeUrlFetch(responder) {
       fetch: function (url, params) {
         calls.push({ url: url, params: params });
         const r = responder ? responder(url, params, calls.length) : {};
+        if (r.error) throw new Error(r.error);
         return {
           getResponseCode: function () { return r.code === undefined ? 200 : r.code; },
           getContentText: function () { return r.body === undefined ? '{"ok":true}' : r.body; }
@@ -363,6 +365,22 @@ function auditRows(props) {
   ok('sendToTelegram_ audit DIGEST_CHATID_MIGRATED dengan ID baharu',
      aksi5.indexOf('DIGEST_CHATID_MIGRATED') !== -1 &&
      JSON.stringify(auditRows(p5)).indexOf('-1009999') !== -1);
+
+  // (f) Kegagalan rangkaian (DNS, timeout, SSL) throw exception -- JANGAN bocorkan URL/token
+  const p6 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f6 = fakeUrlFetch(function () {
+    // Simulasi kegagalan rangkaian: fetch throws dengan mesej yang boleh mengandungi URL+token
+    return { error: 'Failed to resolve host: got getaddrinfo error for api.telegram.org with bottoken:XXX in URL' };
+  });
+  const a6 = loadCode(['sendToTelegram_'], { UrlFetchApp: f6.api,
+    PropertiesService: { getScriptProperties: function () { return p6.api; } } });
+  a6.sendToTelegram_('teks', TOKEN_UJI, '-100123, -100456');
+  const rows6 = auditRows(p6);
+  ok('sendToTelegram_ kegagalan rangkaian menghasilkan 2 audit (bukan 0 atau 1)',
+     rows6.length === 2);
+  ok('AUDIT kegagalan rangkaian TIDAK bocorkan token (tiada ' + TOKEN_UJI + ' dalam audit)',
+     JSON.stringify(rows6).indexOf(TOKEN_UJI) === -1 && JSON.stringify(rows6).indexOf('123456789:') === -1 &&
+     JSON.stringify(rows6).indexOf('getaddrinfo') === -1);
 })();
 
 (function ujianSinkGChat() {
@@ -402,6 +420,22 @@ function auditRows(props) {
      rows3[0].detail.indexOf('404') !== -1);
   ok('AUDIT gchat TIDAK PERNAH memuatkan kunci/token webhook',
      JSON.stringify(rows3).indexOf('KUNCI') === -1 && JSON.stringify(rows3).indexOf('RAHSIA') === -1);
+
+  // Kegagalan rangkaian (DNS, timeout, SSL) throw exception -- JANGAN bocorkan URL/kunci
+  const p4 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f4 = fakeUrlFetch(function () {
+    // Simulasi kegagalan rangkaian: fetch throws dengan mesej yang boleh mengandungi URL+kunci
+    return { error: 'CERTIFICATE_VERIFY_FAILED: unable to verify the first certificate, URL was https://chat.googleapis.com/v1/spaces/AAQZxK/messages?key=KUNCI&token=RAHSIA' };
+  });
+  const a4 = loadCode(['sendToGoogleChat_'], { UrlFetchApp: f4.api,
+    PropertiesService: { getScriptProperties: function () { return p4.api; } } });
+  a4.sendToGoogleChat_('teks', HOOK_UJI + ', ' + HOOK_UJI);
+  const rows4 = auditRows(p4);
+  ok('sendToGoogleChat_ kegagalan rangkaian menghasilkan 2 audit (bukan 0 atau 1)',
+     rows4.length === 2);
+  ok('AUDIT kegagalan rangkaian TIDAK bocorkan kunci (tiada KUNCI/RAHSIA dalam audit)',
+     JSON.stringify(rows4).indexOf('KUNCI') === -1 && JSON.stringify(rows4).indexOf('RAHSIA') === -1 &&
+     JSON.stringify(rows4).indexOf('CERTIFICATE_VERIFY_FAILED') === -1);
 })();
 
 // ---- laporan ------------------------------------------------------------

@@ -41,6 +41,10 @@ const DEFAULT_CONFIG = {
   DIGEST_MINUTE: 45
 };
 
+// Pagar keselamatan Google Chat: hos DIKUNCI ke chat.googleapis.com.
+// Digunakan dalam validateSetupInput_ (masa simpan) dan sendToGoogleChat_ (masa hantar).
+const GCHAT_WEBHOOK_HOST_RE = /^https:\/\/chat\.googleapis\.com\/v1\/spaces\/\S+$/;
+
 function getConfig_() {
   const raw = PropertiesService.getScriptProperties().getProperty('APP_CONFIG_V3');
   if (!raw) return Object.assign({}, DEFAULT_CONFIG);
@@ -148,7 +152,7 @@ function validateSetupInput_(input) {
   // Ralat sebut NOMBOR entri, bukan URL -- URL bawa kunci & token rahsia.
   const hookSalah = [];
   parseCsvList_(cfg.BROADCAST_GCHAT_WEBHOOKS).forEach(function (u, i) {
-    if (!/^https:\/\/chat\.googleapis\.com\/v1\/spaces\/\S+$/.test(u)) hookSalah.push(i + 1);
+    if (!GCHAT_WEBHOOK_HOST_RE.test(u)) hookSalah.push(i + 1);
   });
   if (hookSalah.length) {
     throw new Error('URL webhook Google Chat #' + hookSalah.join(', #') +
@@ -2003,7 +2007,9 @@ function sendToTelegram_(text, token, chatIdsCsv) {
       addAudit_('DIGEST_SEND_FAILED',
                 'telegram | ' + id + ' | HTTP ' + code + ' | ' + (body.description || ''), adminEmail);
     } catch (e) {
-      addAudit_('DIGEST_SEND_FAILED', 'telegram | ' + id + ' | ' + e.message, adminEmail);
+      // JANGAN sertakan e.message di sini: pada kegagalan tahap rangkaian (DNS, timeout,
+      // SSL), e.message boleh mengandungi URL endpoint lengkap (bersama token bot rahsia).
+      addAudit_('DIGEST_SEND_FAILED', 'telegram | ' + id + ' | ralat rangkaian', adminEmail);
     }
   });
   return berjaya;
@@ -2025,7 +2031,7 @@ function sendToGoogleChat_(text, webhooksCsv) {
 
   urls.forEach(function (u) {
     const label = String(u).split('?')[0];
-    if (!/^https:\/\/chat\.googleapis\.com\/v1\/spaces\/\S+$/.test(u)) {
+    if (!GCHAT_WEBHOOK_HOST_RE.test(u)) {
       addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | hos bukan chat.googleapis.com', adminEmail);
       return;
     }
@@ -2038,7 +2044,9 @@ function sendToGoogleChat_(text, webhooksCsv) {
       if (code >= 200 && code <= 299) { berjaya++; return; }
       addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | HTTP ' + code, adminEmail);
     } catch (e) {
-      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | ' + e.message, adminEmail);
+      // JANGAN sertakan e.message di sini: pada kegagalan tahap rangkaian (DNS, timeout,
+      // SSL), e.message boleh mengandungi URL webhook lengkap (bersama key/token rahsia).
+      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | ralat rangkaian', adminEmail);
     }
   });
   return berjaya;
