@@ -1443,9 +1443,18 @@ function sendActivityReminders_() {
     // Setiap aktiviti boleh ada penerima BERBEZA (Semua Guru / Guru Tertentu),
     // jadi kandungan digest kini PERIBADI per guru -- bukan satu BCC sekaligus
     // macam sebelum ni. inbox: email -> senarai aktiviti relevan untuk dia.
+    // adminUnsent: aktiviti "Guru Tertentu" yang SEMUA nama dah tak approved --
+    // TAK dihantar kat sesiapa, admin je dapat notis (keputusan master).
     const inbox = {};
+    const adminUnsent = [];
     due.forEach(function(e) {
-      resolveEventRecipients_(e, approvedEmails, cfg.ADMIN_EMAIL).forEach(function(email) {
+      const result = resolveEventRecipients_(e, approvedEmails, cfg.ADMIN_EMAIL);
+      if (result.allSuspended) {
+        adminUnsent.push(e);
+        if (!inbox[cfg.ADMIN_EMAIL]) inbox[cfg.ADMIN_EMAIL] = [];
+        return;
+      }
+      result.recipients.forEach(function(email) {
         if (!inbox[email]) inbox[email] = [];
         inbox[email].push(e);
       });
@@ -1454,13 +1463,16 @@ function sendActivityReminders_() {
     // Best-effort per penerima -- satu emel gagal (cth alamat rosak) tak patut
     // halang penerima lain terima digest mereka.
     Object.keys(inbox).forEach(function(email) {
+      const events = inbox[email];
+      const unsent = email === cfg.ADMIN_EMAIL ? adminUnsent : [];
+      if (!events.length && !unsent.length) return;
       try {
         MailApp.sendEmail({
           to: email,
           subject: 'Peringatan Aktiviti — ' + cfg.APP_NAME,
           name: cfg.SHORT_NAME + ' Calendar',
-          htmlBody: buildReminderDigestHtml_(inbox[email], cfg),
-          body: buildReminderDigestText_(inbox[email])
+          htmlBody: buildReminderDigestHtml_(events, cfg, unsent),
+          body: buildReminderDigestText_(events, unsent)
         });
       } catch (e) {
         addAudit_('REMINDER_EMAIL_FAILED', email + ' | ' + e.message, cfg.ADMIN_EMAIL);
@@ -1476,17 +1488,31 @@ function sendActivityReminders_() {
 // Pure -- tentukan senarai emel yang patut terima reminder aktiviti ni.
 // remindTo diisi -> HANYA nama tu (ditapis kekal approved) + admin (overview).
 // remindTo kosong ("Semua Guru") -> semua approved + admin. Admin SENTIASA
-// termasuk supaya dia nampak gambaran penuh (padan keputusan master).
+// termasuk supaya dia nampak gambaran penuh (keputusan master).
+// Pulangkan { recipients, allSuspended }. "Guru Tertentu" yang SEMUA nama dalam
+// senarai dah tak approved (disuspend/dipadam) -- JANGAN fallback broadcast ke
+// Semua Guru (keputusan master 2026-09-06): allSuspended=true, recipients kosong,
+// caller (sendActivityReminders_) yang uruskan notis khas ke admin sahaja.
 function resolveEventRecipients_(event, approvedEmails, adminEmail) {
+  const wasTargeted = !!(event.remindTo && event.remindTo.length);
+
+  if (!wasTargeted) {
+    const set = {};
+    approvedEmails.forEach(function(e) { if (e) set[e] = true; });
+    if (adminEmail) set[adminEmail] = true;
+    return { recipients: Object.keys(set), allSuspended: false };
+  }
+
   const approvedSet = {};
   approvedEmails.forEach(function(e) { approvedSet[e] = true; });
-  const remindTo = (event.remindTo || []).filter(function(e) { return approvedSet[e]; });
-  const base = remindTo.length ? remindTo : approvedEmails;
+  const remindTo = event.remindTo.filter(function(e) { return approvedSet[e]; });
+
+  if (!remindTo.length) return { recipients: [], allSuspended: true };
 
   const set = {};
-  base.forEach(function(e) { if (e) set[e] = true; });
+  remindTo.forEach(function(e) { set[e] = true; });
   if (adminEmail) set[adminEmail] = true;
-  return Object.keys(set);
+  return { recipients: Object.keys(set), allSuspended: false };
 }
 
 // Pure -- kira sama ada aktiviti jatuh TEPAT pada hari H-nya. Diuji dalam
@@ -1508,7 +1534,10 @@ function markReminderSent_(eventId) {
   PropertiesService.getScriptProperties().setProperty('RSENT_' + eventId, String(Date.now()));
 }
 
-function buildReminderDigestHtml_(events, cfg) {
+// unsent (optional) -- HANYA diisi untuk digest admin: aktiviti "Guru Tertentu"
+// yang semua nama ditag dah tak approved, jadi TAK dihantar kat sesiapa. Admin
+// nampak kad amaran berasingan (bukan tersenarai macam reminder biasa).
+function buildReminderDigestHtml_(events, cfg, unsent) {
   const cards = events.map(function(e) {
     const rows = [];
     rows.push(reminderRow_('Tarikh', formatDate_(new Date(e.start), 'EEEE, d MMMM yyyy')));
@@ -1523,11 +1552,25 @@ function buildReminderDigestHtml_(events, cfg) {
       '</div>';
   }).join('');
 
+  const unsentCards = (unsent || []).map(function(e) {
+    return '<div style="border-left:4px solid #dc2626;padding:8px 12px;margin:10px 0;background:#fef2f2">' +
+      '<p style="margin:0 0 4px;font-weight:bold;font-size:15px;color:#dc2626">⚠️ Reminder TIDAK dihantar — ' +
+      escapeHtmlServer_(e.title) + '</p>' +
+      '<p style="margin:0;font-size:13px">Semua guru yang ditag sebagai "Guru Penerima" untuk aktiviti ini ' +
+      'sudah tidak aktif (disuspend/dipadam). Sila semak semula senarai penerima aktiviti ini.</p>' +
+      '</div>';
+  }).join('');
+
+  const intro = events.length
+    ? '<p>Berikut aktiviti berjadual dalam <strong>' + escapeHtmlServer_(cfg.APP_NAME) + '</strong> yang akan berlangsung tidak lama lagi:</p>'
+    : '';
+
   return '<div style="font-family:Arial,sans-serif">' +
     '<h2 style="color:' + cfg.THEME_COLOR + '">Peringatan Aktiviti Akan Datang</h2>' +
     '<p>Salam sejahtera,</p>' +
-    '<p>Berikut aktiviti berjadual dalam <strong>' + escapeHtmlServer_(cfg.APP_NAME) + '</strong> yang akan berlangsung tidak lama lagi:</p>' +
+    intro +
     cards +
+    unsentCards +
     '<p style="color:#6f7f93;font-size:12px">Emel ini dihantar automatik oleh sistem ' + escapeHtmlServer_(cfg.APP_NAME) + '. Sila jangan balas emel ini.</p>' +
     '</div>';
 }
@@ -1537,10 +1580,18 @@ function reminderRow_(label, val) {
          '<td style="padding:2px 0">' + escapeHtmlServer_(val) + '</td></tr>';
 }
 
-function buildReminderDigestText_(events) {
-  return 'Peringatan Aktiviti:\n' + events.map(function(e) {
-    return '- ' + e.title + ' (' + e.reminderDays + ' hari lagi, ' + formatDate_(new Date(e.start), 'd MMMM yyyy') + ')';
-  }).join('\n');
+function buildReminderDigestText_(events, unsent) {
+  const lines = [];
+  if (events.length) {
+    lines.push('Peringatan Aktiviti:');
+    events.forEach(function(e) {
+      lines.push('- ' + e.title + ' (' + e.reminderDays + ' hari lagi, ' + formatDate_(new Date(e.start), 'd MMMM yyyy') + ')');
+    });
+  }
+  (unsent || []).forEach(function(e) {
+    lines.push('[TIDAK DIHANTAR] ' + e.title + ' -- semua guru ditag sudah tidak aktif.');
+  });
+  return lines.join('\n');
 }
 
 // Jalankan SEKALI SAHAJA dari Apps Script Editor (Run) selepas deploy code ni --
@@ -1678,13 +1729,20 @@ function selfTestReminderHelpers_() {
 
   const approved = ['a@x.com', 'b@x.com', 'c@x.com', 'admin@x.com'];
   ok('resolveEventRecipients_ Semua Guru (remindTo kosong) -> semua approved + admin',
-     eq(resolveEventRecipients_({ remindTo: [] }, approved, 'admin@x.com').sort(), approved.slice().sort()));
+     eq(resolveEventRecipients_({ remindTo: [] }, approved, 'admin@x.com').recipients.sort(), approved.slice().sort()));
+  ok('resolveEventRecipients_ Semua Guru -> allSuspended sentiasa false',
+     resolveEventRecipients_({ remindTo: [] }, approved, 'admin@x.com').allSuspended === false);
   ok('resolveEventRecipients_ Guru Tertentu -> HANYA nama tu + admin (bukan semua)',
-     eq(resolveEventRecipients_({ remindTo: ['a@x.com'] }, approved, 'admin@x.com').sort(), ['a@x.com', 'admin@x.com'].sort()));
-  ok('resolveEventRecipients_ nama dalam remindTo tapi DAH TAK approved -> ditapis, fallback Semua Guru',
-     eq(resolveEventRecipients_({ remindTo: ['bekas-guru@x.com'] }, approved, 'admin@x.com').sort(), approved.slice().sort()));
+     eq(resolveEventRecipients_({ remindTo: ['a@x.com'] }, approved, 'admin@x.com').recipients.sort(), ['a@x.com', 'admin@x.com'].sort()));
+  ok('resolveEventRecipients_ SEBAHAGIAN guru ditag disuspend -> baki yg approved je (bukan semua ditapis)',
+     eq(resolveEventRecipients_({ remindTo: ['a@x.com', 'bekas-guru@x.com'] }, approved, 'admin@x.com').recipients.sort(), ['a@x.com', 'admin@x.com'].sort()));
+  ok('resolveEventRecipients_ SEMUA guru ditag disuspend -> allSuspended=true, recipients KOSONG (bukan fallback Semua Guru)',
+     (function() {
+       const r = resolveEventRecipients_({ remindTo: ['bekas-guru@x.com'] }, approved, 'admin@x.com');
+       return r.allSuspended === true && eq(r.recipients, []);
+     })());
   ok('resolveEventRecipients_ admin sedia ada dalam approved -> tiada duplicate',
-     resolveEventRecipients_({ remindTo: ['admin@x.com'] }, approved, 'admin@x.com').length === 1);
+     resolveEventRecipients_({ remindTo: ['admin@x.com'] }, approved, 'admin@x.com').recipients.length === 1);
 
   const summary = results.join('\n');
   Logger.log(summary);
