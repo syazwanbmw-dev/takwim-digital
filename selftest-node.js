@@ -151,7 +151,32 @@ runSuite('selfTestReminderHelpers_');
 runSuite('selfTestDigestHelpers_');
 
 // ---- ujian orkestrasi (perlu objek palsu -- tak boleh hidup dalam Code.js) ----
-// (diisi bermula Task 10)
+// --- ujian kembar: nama bulan server vs client -------------------------------
+// KENAPA: Index.html (client) dan Code.js (server) masing-masing simpan senarai
+// bulan Melayu sendiri, sebab dua RUNTIME berbeza. Salinan yang menyimpang senyap
+// akan buat digest dan skrin sebut bulan berbeza untuk aktiviti yang SAMA.
+(function ujianKembarBulan() {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const m = html.match(/const\s+MONTH_LONG_MS\s*=\s*(\[[^\]]*\])/);
+  ok('Index.html masih ada MONTH_LONG_MS untuk dibanding', !!m);
+  if (!m) return;
+  const client = JSON.parse(m[1].replace(/'/g, '"'));
+  const api = loadCode(['DIGEST_MONTH_MS']);
+  ok('DIGEST_MONTH_MS (server) === MONTH_LONG_MS (client)', eq(api.DIGEST_MONTH_MS, client));
+})();
+
+// --- ujian kembar: pembetulan end eksklusif all-day --------------------------
+// digestEndDate_ (server) ialah salinan displayEndDate (client). Kalau salah satu
+// dibetulkan tanpa satu lagi, tarikh tamat aktiviti all-day akan bercanggah.
+(function ujianKembarEndDate() {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  ok('Index.html masih tolak 1000ms untuk allDay (displayEndDate)',
+     /function displayEndDate\(e\)\{return e\.allDay\?new Date\(new Date\(e\.end\)\.getTime\(\)-1000\)/.test(html));
+  const api = loadCode(['digestEndDate_']);
+  const ev = { end: new Date(2026, 8, 17, 0, 0).toISOString(), allDay: true };
+  ok('digestEndDate_ (server) tolak 1000ms yang sama',
+     api.digestEndDate_(ev).getTime() === new Date(2026, 8, 17, 0, 0).getTime() - 1000);
+})();
 
 // ---- laporan ------------------------------------------------------------
 

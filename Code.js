@@ -1764,6 +1764,43 @@ function isoWeekKey_(date) {
   return isoYear + '-W' + (week < 10 ? '0' + week : String(week));
 }
 
+// Nama hari/bulan Melayu ditulis di SINI (bukan formatDate_) sebab
+// Utilities.formatDate pulang nama INGGERIS ("Monday, 8 September") mengikut
+// locale skrip -- digest pergi kepada ibu bapa & murid, jadi ia mesti Melayu.
+// Index (0..) sengaja padan Date.getDay() / Date.getMonth().
+const DIGEST_DAY_MS = ['Ahad', 'Isnin', 'Selasa', 'Rabu', 'Khamis', 'Jumaat', 'Sabtu'];
+const DIGEST_MONTH_MS = ['Januari', 'Februari', 'Mac', 'April', 'Mei', 'Jun',
+                         'Julai', 'Ogos', 'September', 'Oktober', 'November', 'Disember'];
+
+function isSameCalDay_(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+// Google Calendar guna 'end' EKSKLUSIF untuk event sepanjang hari (allDay): tengah
+// malam PERMULAAN hari LEPAS event tamat. Tolak 1 saat SEBELUM sebarang pengiraan
+// "hari", kalau tidak label julat tersasar +1 hari dan ibu bapa dapat tarikh SALAH.
+// Ini SALINAN displayEndDate() dalam Index.html -- runtime BERBEZA (server tak boleh
+// panggil fungsi client), jadi salinan ni dipolis oleh ujian kembar dalam
+// selftest-node.js yang membaca KEDUA-DUA fail.
+function digestEndDate_(e) {
+  const end = new Date(e.end);
+  return e.allDay ? new Date(end.getTime() - 1000) : end;
+}
+
+function digestDateLong_(d) {
+  return DIGEST_DAY_MS[d.getDay()] + ', ' + d.getDate() + ' ' +
+         DIGEST_MONTH_MS[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+// Satu hari -> "Isnin, 7 September 2026". Pelbagai hari -> "mula – tamat" (en-dash,
+// padan contoh dalam spec).
+function digestDateLabel_(e) {
+  const start = new Date(e.start);
+  const end = digestEndDate_(e);
+  const label = digestDateLong_(start);
+  return isSameCalDay_(start, end) ? label : label + ' – ' + digestDateLong_(end);
+}
+
 /* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.
@@ -1934,6 +1971,41 @@ function selfTestDigestHelpers_() {
      isoWeekKey_(new Date(2026, 8, 6)) === '2026-W36' && isoWeekKey_(new Date(2026, 1, 2)) === '2026-W06');
   ok('isoWeekKey_ hari BERBEZA dalam minggu sama -> kunci sama',
      isoWeekKey_(new Date(2026, 8, 14)) === isoWeekKey_(new Date(2026, 8, 20)));
+
+  // Nota: Date bulan-0-based. 2026-09-07 ialah ISNIN, 2026-09-11 JUMAAT.
+  const satuHari = { start: new Date(2026, 8, 7, 9, 0).toISOString(),
+                     end: new Date(2026, 8, 7, 11, 0).toISOString(), allDay: false };
+  ok('digestDateLabel_ satu hari -> "Isnin, 7 September 2026"',
+     digestDateLabel_(satuHari) === 'Isnin, 7 September 2026');
+
+  const julat = { start: new Date(2026, 8, 9, 8, 0).toISOString(),
+                  end: new Date(2026, 8, 11, 17, 0).toISOString(), allDay: false };
+  ok('digestDateLabel_ julat berjadual -> mula – tamat',
+     digestDateLabel_(julat) === 'Rabu, 9 September 2026 – Jumaat, 11 September 2026');
+
+  // Event all-day SATU hari: Calendar hantar end = tengah malam PERMULAAN hari BERIKUT.
+  const allDaySatu = { start: new Date(2026, 8, 16, 0, 0).toISOString(),
+                       end: new Date(2026, 8, 17, 0, 0).toISOString(), allDay: true };
+  ok('digestDateLabel_ all-day SATU hari tak jadi julat palsu (end eksklusif)',
+     digestDateLabel_(allDaySatu) === 'Rabu, 16 September 2026');
+
+  const allDayJulat = { start: new Date(2026, 8, 14, 0, 0).toISOString(),
+                        end: new Date(2026, 8, 19, 0, 0).toISOString(), allDay: true };
+  ok('digestDateLabel_ all-day pelbagai hari tamat pada hari SEBENAR (bukan +1)',
+     digestDateLabel_(allDayJulat) === 'Isnin, 14 September 2026 – Jumaat, 18 September 2026');
+
+  ok('digestEndDate_ TIDAK sentuh event berjadual (allDay=false)',
+     digestEndDate_(julat).getTime() === new Date(julat.end).getTime());
+
+  ok('isSameCalDay_ hari sama walau jam berbeza',
+     isSameCalDay_(new Date(2026, 8, 7, 0, 1), new Date(2026, 8, 7, 23, 59)));
+  ok('isSameCalDay_ hari berbeza -> false',
+     !isSameCalDay_(new Date(2026, 8, 7, 23, 59), new Date(2026, 8, 8, 0, 1)));
+
+  ok('DIGEST_DAY_MS mula Ahad (padan Date.getDay())',
+     DIGEST_DAY_MS[0] === 'Ahad' && DIGEST_DAY_MS[6] === 'Sabtu' && DIGEST_DAY_MS.length === 7);
+  ok('DIGEST_MONTH_MS 12 bulan Melayu penuh',
+     DIGEST_MONTH_MS.length === 12 && DIGEST_MONTH_MS[0] === 'Januari' && DIGEST_MONTH_MS[11] === 'Disember');
 
   const summary = results.join('\n');
   Logger.log(summary);
