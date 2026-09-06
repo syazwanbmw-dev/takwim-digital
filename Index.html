@@ -273,7 +273,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
           <label style="font-weight:normal;font-size:14px;letter-spacing:normal"><input type="radio" name="remindMode" value="custom" onchange="onRemindModeChange()"> Guru Tertentu</label>
         </div>
         <div id="remindToBox" hidden style="max-height:160px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:8px 10px">
-          <div id="remindToList" style="color:#6f7f93">Memuatkan…</div>
+          <div id="remindToList"><span style="color:#6f7f93">Memuatkan…</span></div>
         </div>
       </div>
       <div class="field"><label>PIC</label><input id="eventPic"></div>
@@ -809,7 +809,7 @@ function renderRemindToList(selected){
   const box=document.getElementById('remindToList');
   box.innerHTML=(REMIND_USERS||[]).map(u=>{
     const checked=selected.indexOf(u.email)!==-1?'checked':'';
-    return `<label style="display:block;font-weight:normal;font-size:14px;letter-spacing:normal;padding:3px 0"><input type="checkbox" class="remindToChk" value="${esc(u.email)}" ${checked}> ${esc(u.name)}</label>`
+    return `<label style="display:flex;align-items:flex-start;font-weight:normal;font-size:14px;letter-spacing:normal;padding:3px 0;color:#1e293b"><input type="checkbox" class="remindToChk" value="${esc(u.email)}" ${checked}><span>${esc(u.name)}</span></label>`
   }).join('')||'<div style="color:#6f7f93">Tiada guru approved.</div>'
 }
 function onRemindModeChange(){
