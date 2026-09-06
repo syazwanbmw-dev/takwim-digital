@@ -313,6 +313,7 @@ function submitRegistration(profile) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let rateBlock = null;   // { audit: string|null, msg: string } kalau ditolak
+  let newPending = null;  // { user, pendingTotal } kalau rekod pending NET-BAHARU dicipta
   try {
     const users = getUsers_();
     const existing = users[email];
@@ -367,6 +368,8 @@ function submitRegistration(profile) {
           suspendedAt: ''
         };
         saveUsers_(users);
+        // Tangguh e-mel admin ke LUAR lock -- MailApp lambat + addAudit_ guna lock SAMA.
+        newPending = { user: users[email], pendingTotal: pendingCount + 1 };
       }
     }
   } finally {
@@ -379,6 +382,9 @@ function submitRegistration(profile) {
   }
 
   addAudit_('REGISTRATION_SUBMITTED', email + ' | ' + profile.name, email);
+
+  // Hanya untuk pendaftaran net-baharu -- bukan bila guru betulkan typo profil 'pending'.
+  if (newPending) notifyAdminNewRegistration_(newPending.user, newPending.pendingTotal);
 
   return {
     success: true,
@@ -1333,6 +1339,42 @@ function sendApprovalEmail_(user) {
     });
   } catch (e) {
     addAudit_('APPROVAL_EMAIL_FAILED', user.email + ' | ' + e.message, getConfig_().ADMIN_EMAIL);
+  }
+}
+
+// Beritahu Super Admin ada permohonan akses baru menunggu kelulusan.
+// Dipanggil di LUAR lock (MailApp lambat), best-effort -- gagal hantar tak patah pendaftaran.
+function notifyAdminNewRegistration_(user, pendingTotal) {
+  try {
+    const cfg = getConfig_();
+    if (!cfg.ADMIN_EMAIL) return;
+    const row_ = function (label, val) {
+      return '<tr><td style="padding:2px 10px 2px 0"><strong>' + label + '</strong></td>' +
+             '<td style="padding:2px 0">' + escapeHtmlServer_(val) + '</td></tr>';
+    };
+    MailApp.sendEmail({
+      to: cfg.ADMIN_EMAIL,
+      subject: 'Permohonan Akses Baru — ' + cfg.APP_NAME,
+      name: cfg.SHORT_NAME + ' Calendar',
+      htmlBody:
+        '<div style="font-family:Arial,sans-serif">' +
+        '<h2 style="color:' + cfg.THEME_COLOR + '">Permohonan Akses Baru</h2>' +
+        '<p>Seorang pengguna baharu telah mendaftar dan sedang menunggu kelulusan anda:</p>' +
+        '<table style="border-collapse:collapse">' +
+        row_('Nama', user.name) + row_('Jawatan', user.position) +
+        row_('Unit', user.unit) + row_('Email', user.email) +
+        '</table>' +
+        '<p>Jumlah permohonan menunggu kelulusan sekarang: <strong>' + pendingTotal + '</strong>.</p>' +
+        '<p>Sila buka panel <strong>Pengurusan Pengguna</strong> dalam dashboard untuk luluskan atau tolak.</p>' +
+        '</div>',
+      body:
+        'Permohonan akses baru: ' + user.name + ' (' + user.email + '), ' +
+        user.position + ' — ' + user.unit + '. ' +
+        'Jumlah menunggu kelulusan: ' + pendingTotal + '. ' +
+        'Sila buka panel Pengurusan Pengguna dalam dashboard untuk luluskan.'
+    });
+  } catch (e) {
+    addAudit_('PENDING_NOTIFY_EMAIL_FAILED', user.email + ' | ' + e.message, getConfig_().ADMIN_EMAIL);
   }
 }
 
