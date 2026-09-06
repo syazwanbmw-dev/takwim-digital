@@ -461,6 +461,19 @@ function getAdminUsers(token) {
   return { users: rows };
 }
 
+// Senarai ringkas guru approved untuk checkbox "Guru Penerima" reminder --
+// kebenaran canCreate (sesiapa yang boleh tambah aktiviti), BUKAN canManageUsers,
+// sebab ni bukan pengurusan pengguna. Cuma email+nama, tiada position/unit/role.
+function getApprovedUserOptions(token) {
+  requireSession_(token, 'canCreate');
+  const users = getUsers_();
+  return Object.keys(users)
+    .map(function(email) { return users[email]; })
+    .filter(function(u) { return u.status === 'approved'; })
+    .map(function(u) { return { email: u.email, name: u.name || u.email }; })
+    .sort(function(a, b) { return a.name.localeCompare(b.name); });
+}
+
 function approveUser(token, email, role) {
   const admin = requireSession_(token, 'canManageUsers');
   email = normalizeEmail_(email);
@@ -1146,6 +1159,7 @@ function holidayToObject_(event) {
     categoryLabel: CATEGORY_CONFIG.cuti.label,
     hasReminder: false,
     reminderDays: 0,
+    remindTo: [],
     pic: '',
     agency: '',
     isHoliday: true
@@ -1187,6 +1201,7 @@ function eventToObject_(event) {
     categoryLabel: CATEGORY_CONFIG[category].label,
     hasReminder: meta.reminderDays > 0,
     reminderDays: meta.reminderDays,
+    remindTo: meta.remindTo,
     pic: meta.pic,
     agency: meta.agency
   };
@@ -1212,6 +1227,8 @@ function buildDescription_(payload, category) {
   if (payload.agency) parts.push('Agensi: ' + String(payload.agency).trim());
   const reminderDays = clampReminderDays_(payload.reminderDays);
   if (reminderDays > 0) parts.push('Reminder: ' + reminderDays);
+  const remindTo = normalizeRemindToList_(payload.remindTo);
+  if (remindTo.length) parts.push('RemindTo: ' + remindTo.join(','));
   parts.push('[PPD_CATEGORY:' + category + ']');
   return parts.join('\n');
 }
@@ -1221,7 +1238,9 @@ function parseDescriptionMeta_(description) {
   const agency = (description.match(/(?:^|\n)Agensi:\s*(.+)/i) || [,''])[1].trim();
   const reminderMatch = description.match(/(?:^|\n)Reminder:\s*(\d+)/i);
   const reminderDays = reminderMatch ? clampReminderDays_(reminderMatch[1]) : 0;
-  return { pic: pic, agency: agency, reminderDays: reminderDays };
+  const remindToMatch = description.match(/(?:^|\n)RemindTo:\s*(.+)/i);
+  const remindTo = remindToMatch ? normalizeRemindToList_(remindToMatch[1]) : [];
+  return { pic: pic, agency: agency, reminderDays: reminderDays, remindTo: remindTo };
 }
 
 // Had H-1/H-2/H-3 sahaja (padan pilihan dropdown UI) -- pagar nilai dari client
@@ -1232,12 +1251,27 @@ function clampReminderDays_(value) {
   return n > 3 ? 3 : n;
 }
 
+// Terima array (dari client) ATAU string dipisah koma (dari description bila baca
+// balik) -- trim/lowercase/dedupe, buang entri kosong. Guna normalizeEmail_ sedia ada
+// supaya konsisten dgn cara emel dinormalisasi di seluruh sistem (login/pendaftaran).
+function normalizeRemindToList_(value) {
+  const list = Array.isArray(value) ? value : String(value || '').split(',');
+  const seen = {};
+  const out = [];
+  list.forEach(function(v) {
+    const email = normalizeEmail_(v);
+    if (email && !seen[email]) { seen[email] = true; out.push(email); }
+  });
+  return out;
+}
+
 function cleanDescription_(description) {
   return description
     .replace(/\n?\[PPD_CATEGORY:[a-z]+\]/ig, '')
     .replace(/\n?PIC:\s*.+/ig, '')
     .replace(/\n?Agensi:\s*.+/ig, '')
     .replace(/\n?Reminder:\s*\d+/ig, '')
+    .replace(/\n?RemindTo:\s*.+/ig, '')
     .trim();
 }
 
@@ -1401,25 +1435,58 @@ function sendActivityReminders_() {
     if (!due.length) return;
 
     const users = getUsers_();
-    const recipients = Object.keys(users)
+    const approvedEmails = Object.keys(users)
       .map(function(email) { return users[email]; })
-      .filter(function(u) { return u.status === 'approved' && u.email !== cfg.ADMIN_EMAIL; })
+      .filter(function(u) { return u.status === 'approved'; })
       .map(function(u) { return u.email; });
-    if (!recipients.length) return;
 
-    MailApp.sendEmail({
-      to: cfg.ADMIN_EMAIL,
-      bcc: recipients.join(','),
-      subject: 'Peringatan Aktiviti — ' + cfg.APP_NAME,
-      name: cfg.SHORT_NAME + ' Calendar',
-      htmlBody: buildReminderDigestHtml_(due, cfg),
-      body: buildReminderDigestText_(due)
+    // Setiap aktiviti boleh ada penerima BERBEZA (Semua Guru / Guru Tertentu),
+    // jadi kandungan digest kini PERIBADI per guru -- bukan satu BCC sekaligus
+    // macam sebelum ni. inbox: email -> senarai aktiviti relevan untuk dia.
+    const inbox = {};
+    due.forEach(function(e) {
+      resolveEventRecipients_(e, approvedEmails, cfg.ADMIN_EMAIL).forEach(function(email) {
+        if (!inbox[email]) inbox[email] = [];
+        inbox[email].push(e);
+      });
+    });
+
+    // Best-effort per penerima -- satu emel gagal (cth alamat rosak) tak patut
+    // halang penerima lain terima digest mereka.
+    Object.keys(inbox).forEach(function(email) {
+      try {
+        MailApp.sendEmail({
+          to: email,
+          subject: 'Peringatan Aktiviti — ' + cfg.APP_NAME,
+          name: cfg.SHORT_NAME + ' Calendar',
+          htmlBody: buildReminderDigestHtml_(inbox[email], cfg),
+          body: buildReminderDigestText_(inbox[email])
+        });
+      } catch (e) {
+        addAudit_('REMINDER_EMAIL_FAILED', email + ' | ' + e.message, cfg.ADMIN_EMAIL);
+      }
     });
 
     due.forEach(function(e) { markReminderSent_(e.id); });
   } catch (e) {
     addAudit_('REMINDER_DIGEST_FAILED', e.message, getConfig_().ADMIN_EMAIL);
   }
+}
+
+// Pure -- tentukan senarai emel yang patut terima reminder aktiviti ni.
+// remindTo diisi -> HANYA nama tu (ditapis kekal approved) + admin (overview).
+// remindTo kosong ("Semua Guru") -> semua approved + admin. Admin SENTIASA
+// termasuk supaya dia nampak gambaran penuh (padan keputusan master).
+function resolveEventRecipients_(event, approvedEmails, adminEmail) {
+  const approvedSet = {};
+  approvedEmails.forEach(function(e) { approvedSet[e] = true; });
+  const remindTo = (event.remindTo || []).filter(function(e) { return approvedSet[e]; });
+  const base = remindTo.length ? remindTo : approvedEmails;
+
+  const set = {};
+  base.forEach(function(e) { if (e) set[e] = true; });
+  if (adminEmail) set[adminEmail] = true;
+  return Object.keys(set);
 }
 
 // Pure -- kira sama ada aktiviti jatuh TEPAT pada hari H-nya. Diuji dalam
@@ -1568,6 +1635,7 @@ function selfTestRegHelpers_() {
 function selfTestReminderHelpers_() {
   const results = [];
   function ok(name, cond) { results.push((cond ? 'PASS' : 'FAIL') + ' :: ' + name); }
+  function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 
   ok('clampReminderDays_ dalam julat kekal', clampReminderDays_('2') === 2);
   ok('clampReminderDays_ > 3 dipotong ke 3', clampReminderDays_('99') === 3);
@@ -1594,6 +1662,29 @@ function selfTestReminderHelpers_() {
   ok('isReminderDayMatch_ event dah lepas -> false', !isReminderDayMatch_({ start: dayOffset(-1), reminderDays: 1 }, today));
   ok('isReminderDayMatch_ diff LEBIH BESAR dari reminderDays -> false (padanan TEPAT, bukan >=)',
      !isReminderDayMatch_({ start: dayOffset(5), reminderDays: 3 }, today));
+
+  ok('normalizeRemindToList_ terima array, lowercase + dedupe',
+     eq(normalizeRemindToList_(['Ali@Sekolah.edu.my', 'ali@sekolah.edu.my', 'Ali@Sekolah.edu.my ']),
+        ['ali@sekolah.edu.my']));
+  ok('normalizeRemindToList_ terima string dipisah koma',
+     eq(normalizeRemindToList_('a@x.com,b@x.com'), ['a@x.com', 'b@x.com']));
+  ok('normalizeRemindToList_ kosong/null -> []', eq(normalizeRemindToList_(''), []) && eq(normalizeRemindToList_(null), []));
+
+  const descRemindTo = buildDescription_({ pic: 'Cikgu Ali', remindTo: ['B@x.com', 'a@x.com'] }, 'mesyuarat');
+  ok('buildDescription_ sertakan baris RemindTo', descRemindTo.indexOf('RemindTo: b@x.com,a@x.com') !== -1);
+  ok('parseDescriptionMeta_ round-trip remindTo', eq(parseDescriptionMeta_(descRemindTo).remindTo, ['b@x.com', 'a@x.com']));
+  ok('parseDescriptionMeta_ tiada baris RemindTo -> []', eq(parseDescriptionMeta_(desc).remindTo, []));
+  ok('cleanDescription_ buang baris RemindTo dari paparan', cleanDescription_(descRemindTo).indexOf('RemindTo') === -1);
+
+  const approved = ['a@x.com', 'b@x.com', 'c@x.com', 'admin@x.com'];
+  ok('resolveEventRecipients_ Semua Guru (remindTo kosong) -> semua approved + admin',
+     eq(resolveEventRecipients_({ remindTo: [] }, approved, 'admin@x.com').sort(), approved.slice().sort()));
+  ok('resolveEventRecipients_ Guru Tertentu -> HANYA nama tu + admin (bukan semua)',
+     eq(resolveEventRecipients_({ remindTo: ['a@x.com'] }, approved, 'admin@x.com').sort(), ['a@x.com', 'admin@x.com'].sort()));
+  ok('resolveEventRecipients_ nama dalam remindTo tapi DAH TAK approved -> ditapis, fallback Semua Guru',
+     eq(resolveEventRecipients_({ remindTo: ['bekas-guru@x.com'] }, approved, 'admin@x.com').sort(), approved.slice().sort()));
+  ok('resolveEventRecipients_ admin sedia ada dalam approved -> tiada duplicate',
+     resolveEventRecipients_({ remindTo: ['admin@x.com'] }, approved, 'admin@x.com').length === 1);
 
   const summary = results.join('\n');
   Logger.log(summary);

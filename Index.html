@@ -265,6 +265,16 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
       <div class="field wide"><label>LOKASI</label><input id="eventLocation"></div>
       <div class="field"><label>KATEGORI</label><select id="eventCategory"><option value="program">Program</option><option value="mesyuarat">Mesyuarat</option><option value="lawatan">Lawatan</option><option value="taklimat">Taklimat</option><option value="deadline">Deadline</option><option value="lain">Lain-lain</option></select></div>
       <div class="field"><label>REMINDER EMAIL</label><select id="eventReminder"><option value="0">Tiada</option><option value="1">H-1 (1 hari sebelum)</option><option value="2">H-2 (2 hari sebelum)</option><option value="3">H-3 (3 hari sebelum)</option></select></div>
+      <div class="field wide">
+        <label>GURU PENERIMA REMINDER</label>
+        <div style="display:flex;gap:16px;margin-bottom:8px">
+          <label style="font-weight:normal"><input type="radio" name="remindMode" value="all" checked onchange="onRemindModeChange()"> Semua Guru</label>
+          <label style="font-weight:normal"><input type="radio" name="remindMode" value="custom" onchange="onRemindModeChange()"> Guru Tertentu</label>
+        </div>
+        <div id="remindToBox" hidden style="max-height:160px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;padding:8px 10px">
+          <div id="remindToList" style="color:#6f7f93">Memuatkan…</div>
+        </div>
+      </div>
       <div class="field"><label>PIC</label><input id="eventPic"></div>
       <div class="field"><label>AGENSI</label><input id="eventAgency"></div>
       <div class="field wide"><label>KETERANGAN</label><textarea id="eventDescription"></textarea></div>
@@ -787,17 +797,46 @@ function renderAudit(){
   gs('getAuditLog',[TOKEN],r=>{auditList.innerHTML=r.rows.length?r.rows.map(x=>`<div class="auditRow"><div>${dateTime(x.time)}</div><div><b>${esc(x.actor)}</b><div class="eventSub">${esc(x.action)}</div></div><div>${esc(x.detail)}</div></div>`).join(''):'<div class="empty">Belum ada log.</div>'})
 }
 
+// Senarai guru approved untuk checkbox "Guru Tertentu" -- cache sekali per sesi
+// (list jarang berubah, elak round-trip berulang setiap kali borang dibuka).
+let REMIND_USERS=null;
+function ensureRemindUsers_(cb){
+  if(REMIND_USERS){cb();return}
+  gs('getApprovedUserOptions',[TOKEN],list=>{REMIND_USERS=list||[];cb()},e=>{REMIND_USERS=[];showError(e);cb()})
+}
+function renderRemindToList(selected){
+  const box=document.getElementById('remindToList');
+  box.innerHTML=(REMIND_USERS||[]).map(u=>{
+    const checked=selected.indexOf(u.email)!==-1?'checked':'';
+    return `<label style="display:block;font-weight:normal;padding:3px 0"><input type="checkbox" class="remindToChk" value="${esc(u.email)}" ${checked}> ${esc(u.name)}</label>`
+  }).join('')||'<div style="color:#6f7f93">Tiada guru approved.</div>'
+}
+function onRemindModeChange(){
+  const custom=document.querySelector('input[name=remindMode]:checked').value==='custom';
+  document.getElementById('remindToBox').hidden=!custom;
+}
+function setRemindToUI(remindTo){
+  const mode=(remindTo&&remindTo.length)?'custom':'all';
+  document.querySelector(`input[name=remindMode][value=${mode}]`).checked=true;
+  onRemindModeChange();
+  ensureRemindUsers_(()=>renderRemindToList(remindTo||[]))
+}
+function collectRemindTo(){
+  const mode=document.querySelector('input[name=remindMode]:checked').value;
+  if(mode!=='custom')return[];
+  return Array.from(document.querySelectorAll('.remindToChk:checked')).map(c=>c.value)
+}
 function openEventForm(ds){
   if(!PERMS.canCreate)return;
   resetEventForm();
   let s=ds?new Date(ds+'T09:00:00'):new Date();
   if(!ds)s.setMinutes(Math.ceil(s.getMinutes()/30)*30,0,0);
   const e=new Date(s.getTime()+3600000);
-  eventStart.value=localInput(s);eventEnd.value=localInput(e);eventModal.classList.add('show')
+  eventStart.value=localInput(s);eventEnd.value=localInput(e);setRemindToUI([]);eventModal.classList.add('show')
 }
-function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderDays||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';eventModal.classList.add('show')}
+function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderDays||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';setRemindToUI(selectedEvent.remindTo);eventModal.classList.add('show')}
 function saveEventUI(btn){
-  const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderDays:eventReminder.value,pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
+  const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderDays:eventReminder.value,remindTo:collectRemindTo(),pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
   const fn=p.id?'updateCalendarEvent':'createCalendarEvent';
   const unlock=lockBtn(btn,'Menyimpan…');
   gs(fn,[TOKEN,p],r=>{unlock();closeModal('eventModal');toast(r.message);refreshData()},e=>{unlock();showError(e)})
