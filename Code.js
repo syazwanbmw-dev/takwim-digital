@@ -1851,6 +1851,48 @@ function buildDigestText_(events, cfg) {
   return lines.join('\n');
 }
 
+// 0..6 -> ScriptApp.WeekDay.SUNDAY..SATURDAY. Luar julat / sampah -> Ahad (lalai
+// spec). Tidak boleh jadi jadual pemalar di peringkat fail: ScriptApp.WeekDay
+// hanya wujud pada runtime Apps Script.
+// Pagar julat SENDIRI (bukan clampDigestDay_): clampDigestDay_ POTONG nilai tinggi
+// ke 6 (Sabtu), jadi day=7 akan jadi Sabtu, bukan Ahad. Spec mahu luar julat DUA
+// arah -> Ahad, jadi kita tapis 0..6 terus di sini.
+function weekDayEnum_(n) {
+  const days = [ScriptApp.WeekDay.SUNDAY, ScriptApp.WeekDay.MONDAY, ScriptApp.WeekDay.TUESDAY,
+                ScriptApp.WeekDay.WEDNESDAY, ScriptApp.WeekDay.THURSDAY, ScriptApp.WeekDay.FRIDAY,
+                ScriptApp.WeekDay.SATURDAY];
+  const i = parseInt(n, 10);
+  return days[(i >= 0 && i <= 6) ? i : 0];
+}
+
+// Padam SEMUA trigger sendWeeklyDigest_ sedia ada, cipta SATU baharu. Idempotent --
+// selamat dipanggil berkali-kali, tak akan bertambah trigger. Dipanggil AUTOMATIK
+// oleh installSystem()/updateSystemSettings() setiap kali System Settings disimpan,
+// corak sama syncReminderTrigger_.
+// nearMinute() = tetingkap +-15 minit, BUKAN masa tepat -- ini had Apps Script,
+// diterima untuk digest mingguan.
+function syncDigestTrigger_(day, hour, minute) {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'sendWeeklyDigest_') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('sendWeeklyDigest_').timeBased()
+    .onWeekDay(weekDayEnum_(day))
+    .atHour(clampDigestHour_(hour))
+    .nearMinute(clampMinute_(minute))
+    .create();
+}
+
+// Bootstrap MANUAL dari Apps Script Editor (Run) -- untuk reset trigger tanpa
+// menyimpan System Settings, atau untuk sistem yang sudah dipasang sebelum ciri ni
+// wujud. Cermin installReminderTrigger_.
+function installDigestTrigger_() {
+  const cfg = getConfig_();
+  syncDigestTrigger_(cfg.DIGEST_DAY, cfg.DIGEST_HOUR, cfg.DIGEST_MINUTE);
+  return 'Trigger digest direset -- ' + DIGEST_DAY_MS[clampDigestDay_(cfg.DIGEST_DAY)] + ' lebih kurang ' +
+         String(clampDigestHour_(cfg.DIGEST_HOUR)).padStart(2, '0') + ':' +
+         String(clampMinute_(cfg.DIGEST_MINUTE)).padStart(2, '0') + '.';
+}
+
 /* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.

@@ -236,6 +236,55 @@ function sliceBody(src, startMarker, endMarker) {
      badge.indexOf('Telegram') !== -1 && badge.indexOf('Google Chat') !== -1);
 })();
 
+// --- trigger digest (perlu ScriptApp palsu) ----------------------------------
+(function ujianSyncDigestTrigger() {
+  const dipadam = [];
+  const dibina = [];
+  function builder(fn) {
+    const b = {
+      timeBased: function () { return b; },
+      onWeekDay: function (d) { dibina.push(['onWeekDay', d]); return b; },
+      atHour: function (h) { dibina.push(['atHour', h]); return b; },
+      nearMinute: function (m) { dibina.push(['nearMinute', m]); return b; },
+      create: function () { dibina.push(['create', fn]); return b; }
+    };
+    return b;
+  }
+  const triggerPalsu = function (name) {
+    return { getHandlerFunction: function () { return name; } };
+  };
+  const ScriptAppPalsu = {
+    WeekDay: { SUNDAY: 'SUN', MONDAY: 'MON', TUESDAY: 'TUE', WEDNESDAY: 'WED',
+               THURSDAY: 'THU', FRIDAY: 'FRI', SATURDAY: 'SAT' },
+    getProjectTriggers: function () {
+      return [triggerPalsu('sendWeeklyDigest_'), triggerPalsu('sendActivityReminders_'),
+              triggerPalsu('sendWeeklyDigest_')];
+    },
+    deleteTrigger: function (t) { dipadam.push(t.getHandlerFunction()); },
+    newTrigger: function (fn) { return builder(fn); }
+  };
+
+  const api = loadCode(['syncDigestTrigger_', 'weekDayEnum_'], { ScriptApp: ScriptAppPalsu });
+
+  ok('weekDayEnum_ 0..6 -> Ahad..Sabtu',
+     api.weekDayEnum_(0) === 'SUN' && api.weekDayEnum_(3) === 'WED' && api.weekDayEnum_(6) === 'SAT');
+  ok('weekDayEnum_ luar julat / sampah -> Ahad',
+     api.weekDayEnum_(7) === 'SUN' && api.weekDayEnum_(-1) === 'SUN' && api.weekDayEnum_('x') === 'SUN');
+
+  api.syncDigestTrigger_(1, 7, 45);
+  ok('syncDigestTrigger_ padam SEMUA trigger digest lama (2 daripada 3)',
+     eq(dipadam, ['sendWeeklyDigest_', 'sendWeeklyDigest_']));
+  ok('syncDigestTrigger_ TIDAK sentuh trigger reminder', dipadam.indexOf('sendActivityReminders_') === -1);
+  ok('syncDigestTrigger_ bina satu trigger mingguan ikut hari/jam/minit',
+     eq(dibina, [['onWeekDay', 'MON'], ['atHour', 7], ['nearMinute', 45], ['create', 'sendWeeklyDigest_']]));
+
+  // Nilai rosak dari client tak boleh meletupkan pembinaan trigger.
+  dibina.length = 0;
+  api.syncDigestTrigger_('x', 99, 'y');
+  ok('syncDigestTrigger_ pagar nilai rosak -> Ahad / 23 / lalai minit',
+     eq(dibina, [['onWeekDay', 'SUN'], ['atHour', 23], ['nearMinute', 45], ['create', 'sendWeeklyDigest_']]));
+})();
+
 // ---- laporan ------------------------------------------------------------
 
 const summary = results.join('\n');
