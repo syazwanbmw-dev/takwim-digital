@@ -24,7 +24,21 @@ const DEFAULT_CONFIG = {
   MAX_REGISTRATIONS_PER_MINUTE: 10,
   // Jam (0-23) trigger sendActivityReminders_ jalan setiap hari. Boleh admin ubah
   // via System Settings -- lihat syncReminderTrigger_() untuk cara ia diguna pakai.
-  REMINDER_HOUR: 7
+  REMINDER_HOUR: 7,
+  // --- Broadcast digest mingguan (Telegram + Google Chat) ---
+  // Token & URL webhook ialah RAHSIA: disimpan dalam Script Properties sahaja,
+  // tak pernah dipulangkan ke client (lihat projectSystemSettings_) dan tak pernah
+  // masuk audit log. Repo ni PUBLIC.
+  BROADCAST_TG_TOKEN: '',
+  // chat_id group Telegram dipisah koma. Group biasanya ID NEGATIF (cth -1001234567890).
+  BROADCAST_TG_CHAT_IDS: '',
+  // URL incoming webhook Google Chat Space dipisah koma.
+  BROADCAST_GCHAT_WEBHOOKS: '',
+  // Jadual trigger sendWeeklyDigest_: hari (0=Ahad..6=Sabtu), jam (0-23), minit (0-59).
+  // nearMinute() Apps Script = tetingkap +-15 minit, bukan masa TEPAT.
+  DIGEST_DAY: 0,
+  DIGEST_HOUR: 7,
+  DIGEST_MINUTE: 45
 };
 
 function getConfig_() {
@@ -49,12 +63,24 @@ function validateHexColor_(hex) {
   return /^#[0-9a-fA-F]{6}$/.test(String(hex || '').trim());
 }
 
-// Had 0-23 (jam sehari) -- pagar nilai dari client, fallback default kalau rosak/tiada.
-function clampReminderHour_(value) {
+// Pagar integer dari client: potong ke `max`, dan jatuh balik ke `fallback` bila
+// nilai rosak/negatif. Nota: 0 ialah nilai SAH (tengah malam / Ahad), jadi hanya
+// isNaN dan negatif yang jatuh ke fallback -- bukan `!n`.
+function clampInt_(value, max, fallback) {
   const n = parseInt(value, 10);
-  if (isNaN(n) || n < 0) return DEFAULT_CONFIG.REMINDER_HOUR;
-  return n > 23 ? 23 : n;
+  if (isNaN(n) || n < 0) return fallback;
+  return n > max ? max : n;
 }
+
+// Had 0-23 (jam sehari) -- pagar nilai dari client, fallback default kalau rosak/tiada.
+function clampReminderHour_(value) { return clampInt_(value, 23, DEFAULT_CONFIG.REMINDER_HOUR); }
+
+// Jam digest SENGAJA tidak guna semula clampReminderHour_: fallback dia mesti
+// DIGEST_HOUR. Kalau dikongsi, tukar lalai reminder akan diam-diam menukar
+// kelakuan pemulihan digest -- dua tetapan yang tak berkaitan jadi terikat.
+function clampDigestHour_(value) { return clampInt_(value, 23, DEFAULT_CONFIG.DIGEST_HOUR); }
+function clampDigestDay_(value) { return clampInt_(value, 6, DEFAULT_CONFIG.DIGEST_DAY); }
+function clampMinute_(value) { return clampInt_(value, 59, DEFAULT_CONFIG.DIGEST_MINUTE); }
 
 function validateSetupInput_(input) {
   input = input || {};
@@ -1776,6 +1802,19 @@ function selfTestReminderHelpers_() {
      })());
   ok('resolveEventRecipients_ admin sedia ada dalam approved -> tiada duplicate',
      resolveEventRecipients_({ remindTo: ['admin@x.com'] }, approved, 'admin@x.com').recipients.length === 1);
+
+  ok('clampInt_ dalam julat kekal', clampInt_(5, 23, 7) === 5);
+  ok('clampInt_ atas had dipotong ke had', clampInt_(99, 23, 7) === 23 && clampInt_(9, 6, 0) === 6);
+  ok('clampInt_ negatif/sampah -> fallback', clampInt_(-1, 23, 7) === 7 && clampInt_('abc', 23, 7) === 7);
+  ok('clampInt_ 0 KEKAL 0 (0 nilai sah, bukan "kosong")', clampInt_(0, 23, 7) === 0);
+  ok('clampDigestDay_ 0-6', clampDigestDay_(6) === 6 && clampDigestDay_(7) === 6 && clampDigestDay_('x') === DEFAULT_CONFIG.DIGEST_DAY);
+  ok('clampMinute_ 0-59', clampMinute_(59) === 59 && clampMinute_(60) === 59 && clampMinute_('x') === DEFAULT_CONFIG.DIGEST_MINUTE);
+  ok('clampDigestHour_ jatuh balik ke DIGEST_HOUR, BUKAN REMINDER_HOUR',
+     clampDigestHour_('x') === DEFAULT_CONFIG.DIGEST_HOUR && clampDigestHour_(99) === 23);
+  ok('DEFAULT_CONFIG ada 6 kunci broadcast/digest',
+     DEFAULT_CONFIG.BROADCAST_TG_TOKEN === '' && DEFAULT_CONFIG.BROADCAST_TG_CHAT_IDS === '' &&
+     DEFAULT_CONFIG.BROADCAST_GCHAT_WEBHOOKS === '' && DEFAULT_CONFIG.DIGEST_DAY === 0 &&
+     DEFAULT_CONFIG.DIGEST_HOUR === 7 && DEFAULT_CONFIG.DIGEST_MINUTE === 45);
 
   const summary = results.join('\n');
   Logger.log(summary);
