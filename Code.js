@@ -96,7 +96,16 @@ function validateSetupInput_(input) {
     FOOTER_TEXT: String(input.footerText || '').trim().slice(0, 180),
     ICON_URL: String(input.iconUrl || '').trim().slice(0, 500),
     ALLOWED_EMAIL_DOMAINS: parseDomainList_(input.allowedEmailDomains).slice(0, 20).join(','),
-    REMINDER_HOUR: clampReminderHour_(input.reminderHour !== undefined ? input.reminderHour : DEFAULT_CONFIG.REMINDER_HOUR)
+    REMINDER_HOUR: clampReminderHour_(input.reminderHour !== undefined ? input.reminderHour : DEFAULT_CONFIG.REMINDER_HOUR),
+    // AWAS: fungsi ni ialah PENAPIS. Kunci yang tak disenaraikan di sini akan
+    // jatuh balik ke DEFAULT_CONFIG pada SETIAP simpanan System Settings --
+    // iaitu token & chat_id admin lenyap tanpa sebarang mesej.
+    BROADCAST_TG_TOKEN: String(input.broadcastTgToken || '').trim(),
+    BROADCAST_TG_CHAT_IDS: parseCsvList_(input.broadcastTgChatIds).slice(0, 20).join(','),
+    BROADCAST_GCHAT_WEBHOOKS: parseCsvList_(input.broadcastGchatWebhooks).slice(0, 10).join(','),
+    DIGEST_DAY: clampDigestDay_(input.digestDay !== undefined ? input.digestDay : DEFAULT_CONFIG.DIGEST_DAY),
+    DIGEST_HOUR: clampDigestHour_(input.digestHour !== undefined ? input.digestHour : DEFAULT_CONFIG.DIGEST_HOUR),
+    DIGEST_MINUTE: clampMinute_(input.digestMinute !== undefined ? input.digestMinute : DEFAULT_CONFIG.DIGEST_MINUTE)
   };
 
   if (!cfg.APP_NAME || !cfg.OFFICE_NAME || !cfg.SHORT_NAME || !cfg.CALENDAR_ID || !cfg.ADMIN_EMAIL) {
@@ -118,7 +127,94 @@ function validateSetupInput_(input) {
       throw new Error('Domain email Super Admin (' + adminDom + ') mesti termasuk dalam senarai domain dibenarkan.');
     }
   }
+
+  // Bentuk token @BotFather: "<digit>:<rentetan>". Kita semak BENTUK sahaja (sah/tidak
+  // hanya Telegram yang tahu). Mesej ralat TIDAK PERNAH mengulang token: ia berakhir
+  // dalam toast UI dan mungkin dalam log.
+  if (cfg.BROADCAST_TG_TOKEN && !/^\d{5,}:[A-Za-z0-9_-]{20,}$/.test(cfg.BROADCAST_TG_TOKEN)) {
+    throw new Error('Token bot Telegram tidak sah. Bentuk sepatutnya: 123456789:AA...(35 aksara).');
+  }
+  // chat_id group ialah nombor (biasanya NEGATIF); channel awam boleh guna @username.
+  // Menolak apa-apa yang lain menangkap ralat tampal biasa (tampal JSON penuh getUpdates).
+  const idRosak = parseCsvList_(cfg.BROADCAST_TG_CHAT_IDS).filter(function (id) {
+    return !/^-?\d{1,20}$/.test(id) && !/^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(id);
+  });
+  if (idRosak.length) {
+    throw new Error('chat_id Telegram tidak sah: ' + idRosak.join(', ') +
+                    '. Guna nombor (cth -1001234567890) atau @namachannel.');
+  }
+  // Hos DIKUNCI: webhook Chat sentiasa di chat.googleapis.com. Tanpa pagar ni, satu
+  // salah taip menghantar seluruh digest ke hos milik orang lain.
+  // Ralat sebut NOMBOR entri, bukan URL -- URL bawa kunci & token rahsia.
+  const hookSalah = [];
+  parseCsvList_(cfg.BROADCAST_GCHAT_WEBHOOKS).forEach(function (u, i) {
+    if (!/^https:\/\/chat\.googleapis\.com\/v1\/spaces\/\S+$/.test(u)) hookSalah.push(i + 1);
+  });
+  if (hookSalah.length) {
+    throw new Error('URL webhook Google Chat #' + hookSalah.join(', #') +
+                    ' tidak sah. Mesti bermula https://chat.googleapis.com/v1/spaces/');
+  }
   return cfg;
+}
+
+// Pure -- bentuk tetapan yang dihantar ke client. Diasingkan dari getSystemSettings()
+// supaya gerbang WRITE-ONLY (token & URL webhook tak pernah keluar dari server) boleh
+// diuji tanpa sesi palsu. Client hanya dapat BENDERA "sudah diset?", jadi rahsia tak
+// pernah wujud dalam DOM, localStorage, atau tab rangkaian pelayar.
+// chat_id BUKAN rahsia -- admin perlu nampak sasaran untuk sunting/buang.
+function projectSystemSettings_(cfg) {
+  return {
+    appName: cfg.APP_NAME,
+    officeName: cfg.OFFICE_NAME,
+    shortName: cfg.SHORT_NAME,
+    timezone: cfg.TIMEZONE,
+    calendarId: cfg.CALENDAR_ID,
+    adminEmail: cfg.ADMIN_EMAIL,
+    themeColor: cfg.THEME_COLOR,
+    allowRegistration: cfg.ALLOW_REGISTRATION,
+    footerText: cfg.FOOTER_TEXT,
+    iconUrl: cfg.ICON_URL,
+    allowedEmailDomains: cfg.ALLOWED_EMAIL_DOMAINS,
+    reminderHour: cfg.REMINDER_HOUR,
+    broadcastTgChatIds: cfg.BROADCAST_TG_CHAT_IDS,
+    broadcastTgTokenSet: !!cfg.BROADCAST_TG_TOKEN,
+    broadcastGchatSet: !!cfg.BROADCAST_GCHAT_WEBHOOKS,
+    broadcastGchatCount: parseCsvList_(cfg.BROADCAST_GCHAT_WEBHOOKS).length,
+    digestDay: cfg.DIGEST_DAY,
+    digestHour: cfg.DIGEST_HOUR,
+    digestMinute: cfg.DIGEST_MINUTE
+  };
+}
+
+// Pure -- gabung input admin dengan config semasa sebelum validasi.
+// Peraturan medan RAHSIA: borang tak pernah memaparkan nilai semasa, jadi medan
+// kosong bermaksud "jangan ubah", BUKAN "padam". Untuk memadam, admin tanda
+// checkbox clearTgToken / clearGchatWebhooks -- niat eksplisit, bukan nilai ajaib.
+function mergeSettingsInput_(input, current) {
+  input = input || {};
+  const tokenBaharu = String(input.broadcastTgToken || '').trim();
+  const hookBaharu = String(input.broadcastGchatWebhooks || '').trim();
+  return {
+    appName: input.appName || current.APP_NAME,
+    officeName: input.officeName || current.OFFICE_NAME,
+    shortName: input.shortName || current.SHORT_NAME,
+    timezone: input.timezone || current.TIMEZONE,
+    calendarId: input.calendarId || current.CALENDAR_ID,
+    adminEmail: current.ADMIN_EMAIL,
+    themeColor: input.themeColor || current.THEME_COLOR,
+    allowRegistration: input.allowRegistration !== false,
+    footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT,
+    iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL,
+    allowedEmailDomains: input.allowedEmailDomains !== undefined ? input.allowedEmailDomains : current.ALLOWED_EMAIL_DOMAINS,
+    reminderHour: input.reminderHour !== undefined ? input.reminderHour : current.REMINDER_HOUR,
+    broadcastTgToken: input.clearTgToken === true ? '' : (tokenBaharu || current.BROADCAST_TG_TOKEN),
+    broadcastGchatWebhooks: input.clearGchatWebhooks === true ? '' : (hookBaharu || current.BROADCAST_GCHAT_WEBHOOKS),
+    // chat_id bukan rahsia: ia DIPAPAR dalam borang, jadi kosong = admin memang padam.
+    broadcastTgChatIds: input.broadcastTgChatIds !== undefined ? input.broadcastTgChatIds : current.BROADCAST_TG_CHAT_IDS,
+    digestDay: input.digestDay !== undefined ? input.digestDay : current.DIGEST_DAY,
+    digestHour: input.digestHour !== undefined ? input.digestHour : current.DIGEST_HOUR,
+    digestMinute: input.digestMinute !== undefined ? input.digestMinute : current.DIGEST_MINUTE
+  };
 }
 
 function getBootstrapState() {
@@ -180,6 +276,7 @@ function installSystem(input) {
   ensureSecuritySalt_();
   ensureAdminRecord_();
   syncReminderTrigger_(finalCfg.REMINDER_HOUR);
+  syncDigestTrigger_(finalCfg.DIGEST_DAY, finalCfg.DIGEST_HOUR, finalCfg.DIGEST_MINUTE);
   addAudit_('SYSTEM_INSTALLED', finalCfg.APP_NAME + ' | ' + finalCfg.OFFICE_NAME, finalCfg.ADMIN_EMAIL);
 
   return {
@@ -191,40 +288,13 @@ function installSystem(input) {
 
 function getSystemSettings(token) {
   requireSession_(token, 'canManageUsers');
-  const cfg = getConfig_();
-  return {
-    appName: cfg.APP_NAME,
-    officeName: cfg.OFFICE_NAME,
-    shortName: cfg.SHORT_NAME,
-    timezone: cfg.TIMEZONE,
-    calendarId: cfg.CALENDAR_ID,
-    adminEmail: cfg.ADMIN_EMAIL,
-    themeColor: cfg.THEME_COLOR,
-    allowRegistration: cfg.ALLOW_REGISTRATION,
-    footerText: cfg.FOOTER_TEXT,
-    iconUrl: cfg.ICON_URL,
-    allowedEmailDomains: cfg.ALLOWED_EMAIL_DOMAINS,
-    reminderHour: cfg.REMINDER_HOUR
-  };
+  return projectSystemSettings_(getConfig_());
 }
 
 function updateSystemSettings(token, input) {
   const admin = requireSession_(token, 'canManageUsers');
   const current = getConfig_();
-  const mergedInput = {
-    appName: input.appName || current.APP_NAME,
-    officeName: input.officeName || current.OFFICE_NAME,
-    shortName: input.shortName || current.SHORT_NAME,
-    timezone: input.timezone || current.TIMEZONE,
-    calendarId: input.calendarId || current.CALENDAR_ID,
-    adminEmail: current.ADMIN_EMAIL,
-    themeColor: input.themeColor || current.THEME_COLOR,
-    allowRegistration: input.allowRegistration !== false,
-    footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT,
-    iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL,
-    allowedEmailDomains: input.allowedEmailDomains !== undefined ? input.allowedEmailDomains : current.ALLOWED_EMAIL_DOMAINS,
-    reminderHour: input.reminderHour !== undefined ? input.reminderHour : current.REMINDER_HOUR
-  };
+  const mergedInput = mergeSettingsInput_(input, current);
   const next = Object.assign({}, DEFAULT_CONFIG, validateSetupInput_(mergedInput));
 
   const cal = CalendarApp.getCalendarById(next.CALENDAR_ID);
@@ -232,6 +302,7 @@ function updateSystemSettings(token, input) {
 
   PropertiesService.getScriptProperties().setProperty('APP_CONFIG_V3', JSON.stringify(next));
   syncReminderTrigger_(next.REMINDER_HOUR);
+  syncDigestTrigger_(next.DIGEST_DAY, next.DIGEST_HOUR, next.DIGEST_MINUTE);
   addAudit_('SYSTEM_SETTINGS_UPDATED', next.APP_NAME + ' | ' + next.OFFICE_NAME, admin.user.email);
   return { success: true, message: 'Tetapan sistem dikemaskini.', config: getBootstrapState().config };
 }
@@ -2206,6 +2277,96 @@ function selfTestDigestHelpers_() {
        }, 'program');
        return eq(parseDescriptionMeta_(semula).shareChannels, ['gchat']);
      })());
+
+  function inputAsas(extra) {
+    return Object.assign({
+      appName: 'Takwim', officeName: 'SK Salor', shortName: 'SKS',
+      timezone: 'Asia/Kuala_Lumpur', calendarId: 'x@group.calendar.google.com',
+      adminEmail: 'admin@sekolah.edu.my', themeColor: '#0b6ef3'
+    }, extra || {});
+  }
+  const TOKEN_UJI = '123456789:AAHdqTcvbXcvbXcvbXcvbXcvbXcvbXcvbXc';
+  const HOOK_UJI = 'https://chat.googleapis.com/v1/spaces/AAQZxK/messages?key=K&token=T';
+
+  const cfgV = validateSetupInput_(inputAsas({
+    broadcastTgToken: TOKEN_UJI, broadcastTgChatIds: '-1001234567890, -1009876543210',
+    broadcastGchatWebhooks: HOOK_UJI, digestDay: 1, digestHour: 6, digestMinute: 30
+  }));
+  ok('validateSetupInput_ SIMPAN 6 kunci broadcast (kalau tidak, ia dipadam setiap simpanan)',
+     cfgV.BROADCAST_TG_TOKEN === TOKEN_UJI &&
+     cfgV.BROADCAST_TG_CHAT_IDS === '-1001234567890,-1009876543210' &&
+     cfgV.BROADCAST_GCHAT_WEBHOOKS === HOOK_UJI &&
+     cfgV.DIGEST_DAY === 1 && cfgV.DIGEST_HOUR === 6 && cfgV.DIGEST_MINUTE === 30);
+  ok('validateSetupInput_ tanpa medan broadcast -> lalai kosong (tak meletup)',
+     validateSetupInput_(inputAsas()).BROADCAST_TG_TOKEN === '' &&
+     validateSetupInput_(inputAsas()).DIGEST_DAY === DEFAULT_CONFIG.DIGEST_DAY);
+
+  function ralat(fn) { try { fn(); return ''; } catch (e) { return e.message; } }
+
+  const rTok = ralat(function () { validateSetupInput_(inputAsas({ broadcastTgToken: 'bukan-token' })); });
+  ok('validateSetupInput_ TOLAK token bentuk salah', rTok.indexOf('Token bot Telegram') !== -1);
+  ok('mesej ralat token TIDAK memuatkan token itu sendiri (repo PUBLIC, toast UI)',
+     ralat(function () { validateSetupInput_(inputAsas({ broadcastTgToken: 'rahsia123:XX' })); })
+       .indexOf('rahsia123') === -1);
+  ok('validateSetupInput_ TERIMA token sah (ujian berpasangan: tolak DAN terima)',
+     validateSetupInput_(inputAsas({ broadcastTgToken: TOKEN_UJI })).BROADCAST_TG_TOKEN === TOKEN_UJI);
+
+  ok('validateSetupInput_ TOLAK chat_id bukan nombor/@username',
+     ralat(function () { validateSetupInput_(inputAsas({ broadcastTgChatIds: '-100123, bukan-id' })); })
+       .indexOf('chat_id') !== -1);
+  ok('validateSetupInput_ TERIMA chat_id negatif dan @username',
+     validateSetupInput_(inputAsas({ broadcastTgChatIds: '-1001234567890, @takwimsks' }))
+       .BROADCAST_TG_CHAT_IDS === '-1001234567890,@takwimsks');
+
+  ok('validateSetupInput_ TOLAK webhook bukan hos chat.googleapis.com',
+     ralat(function () { validateSetupInput_(inputAsas({ broadcastGchatWebhooks: 'https://jahat.example.com/x' })); })
+       .indexOf('webhook Google Chat') !== -1);
+  ok('mesej ralat webhook TIDAK memuatkan URL (URL bawa kunci rahsia)',
+     ralat(function () { validateSetupInput_(inputAsas({ broadcastGchatWebhooks: 'https://jahat.example.com/?key=RAHSIA' })); })
+       .indexOf('RAHSIA') === -1);
+  ok('validateSetupInput_ TERIMA webhook Google Chat sah',
+     validateSetupInput_(inputAsas({ broadcastGchatWebhooks: HOOK_UJI })).BROADCAST_GCHAT_WEBHOOKS === HOOK_UJI);
+
+  // --- gerbang write-only ---
+  const cfgPenuh = Object.assign({}, DEFAULT_CONFIG, {
+    OFFICE_NAME: 'SK Salor', BROADCAST_TG_TOKEN: TOKEN_UJI,
+    BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: HOOK_UJI
+  });
+  const keluar = projectSystemSettings_(cfgPenuh);
+  ok('projectSystemSettings_ TIDAK pernah pulangkan token/webhook mentah',
+     JSON.stringify(keluar).indexOf(TOKEN_UJI) === -1 && JSON.stringify(keluar).indexOf(HOOK_UJI) === -1 &&
+     JSON.stringify(keluar).indexOf('AAQZxK') === -1);
+  ok('projectSystemSettings_ pulangkan BENDERA, bukan nilai',
+     keluar.broadcastTgTokenSet === true && keluar.broadcastGchatSet === true && keluar.broadcastGchatCount === 1);
+  ok('projectSystemSettings_ bendera false bila belum diset',
+     projectSystemSettings_(DEFAULT_CONFIG).broadcastTgTokenSet === false &&
+     projectSystemSettings_(DEFAULT_CONFIG).broadcastGchatSet === false);
+  ok('projectSystemSettings_ chat_id BUKAN rahsia -- dipulangkan supaya admin nampak sasaran',
+     keluar.broadcastTgChatIds === '-100123');
+  ok('projectSystemSettings_ kekalkan medan tetapan sedia ada',
+     keluar.appName === DEFAULT_CONFIG.APP_NAME && keluar.reminderHour === DEFAULT_CONFIG.REMINDER_HOUR);
+
+  // --- gabungan write-only ---
+  const gab1 = mergeSettingsInput_({ appName: 'Takwim' }, cfgPenuh);
+  ok('mergeSettingsInput_ medan rahsia KOSONG -> KEKALKAN nilai lama',
+     gab1.broadcastTgToken === TOKEN_UJI && gab1.broadcastGchatWebhooks === HOOK_UJI);
+  const gab2 = mergeSettingsInput_({ broadcastTgToken: '   ' }, cfgPenuh);
+  ok('mergeSettingsInput_ ruang kosong DIKIRA kosong (bukan token baharu)',
+     gab2.broadcastTgToken === TOKEN_UJI);
+  const gab3 = mergeSettingsInput_({ broadcastTgToken: 'token-baharu' }, cfgPenuh);
+  ok('mergeSettingsInput_ nilai baharu MENGGANTI yang lama', gab3.broadcastTgToken === 'token-baharu');
+  const gab4 = mergeSettingsInput_({ clearTgToken: true, clearGchatWebhooks: true }, cfgPenuh);
+  ok('mergeSettingsInput_ checkbox padam -> kosongkan rahsia',
+     gab4.broadcastTgToken === '' && gab4.broadcastGchatWebhooks === '');
+  const gab5 = mergeSettingsInput_({ broadcastTgChatIds: '' }, cfgPenuh);
+  ok('mergeSettingsInput_ chat_id BUKAN rahsia -- kosong bermakna PADAM',
+     gab5.broadcastTgChatIds === '');
+  const gab6 = mergeSettingsInput_({}, cfgPenuh);
+  ok('mergeSettingsInput_ tanpa input digest -> kekalkan jadual semasa',
+     gab6.digestDay === cfgPenuh.DIGEST_DAY && gab6.digestHour === cfgPenuh.DIGEST_HOUR &&
+     gab6.digestMinute === cfgPenuh.DIGEST_MINUTE);
+  ok('mergeSettingsInput_ digestDay=0 (Ahad) TIDAK dianggap kosong',
+     mergeSettingsInput_({ digestDay: 0 }, Object.assign({}, cfgPenuh, { DIGEST_DAY: 3 })).digestDay === 0);
 
   const summary = results.join('\n');
   Logger.log(summary);
