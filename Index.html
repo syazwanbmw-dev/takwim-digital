@@ -477,6 +477,7 @@ function renderSettings(){
         <div class="field wide"><label>SUPER ADMIN</label><input value="${attr(s.adminEmail)}" disabled><div class="eventSub">Email Super Admin dikunci untuk keselamatan installer.</div></div>
         <div class="field"><label>WARNA TEMA</label><div class="settingsColor"><input id="setThemeColor" type="color" value="${attr(s.themeColor)}"><span>${esc(s.themeColor)}</span></div></div>
         <div class="field"><label>PENDAFTARAN STAFF</label><select id="setRegistration"><option value="yes" ${s.allowRegistration?'selected':''}>Dibuka + Admin Approval</option><option value="no" ${!s.allowRegistration?'selected':''}>Ditutup</option></select></div>
+        <div class="field"><label>WAKTU HANTAR REMINDER</label><select id="setReminderHour">${Array.from({length:24},(_,h)=>`<option value="${h}" ${Number(s.reminderHour)===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}</select><div class="eventSub">Reminder aktiviti (email H-1/H-2/H-3) dihantar automatik lebih kurang pada jam ini setiap hari.</div></div>
         <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
         <div class="field wide"><label>IKON (URL GAMBAR)</label><input id="setIconUrl" value="${attr(s.iconUrl||'')}" placeholder="https://.../logo.png — kosongkan untuk guna emoji 🏛️"><div class="eventSub">Direct link ke fail gambar (PNG/SVG/JPG). Mesti bermula https://</div></div>
@@ -489,7 +490,8 @@ function saveSettingsUI(btn){
     appName:setAppName.value.trim(),officeName:setOfficeName.value.trim(),shortName:setShortName.value.trim(),
     timezone:setTimezone.value.trim(),calendarId:setCalendarId.value.trim(),themeColor:setThemeColor.value,
     allowRegistration:setRegistration.value==='yes',footerText:setFooter.value.trim(),
-    iconUrl:setIconUrl.value.trim(),allowedEmailDomains:setAllowedDomains.value.trim()
+    iconUrl:setIconUrl.value.trim(),allowedEmailDomains:setAllowedDomains.value.trim(),
+    reminderHour:parseInt(setReminderHour.value,10)
   };
   const unlock=lockBtn(btn,'Menyimpan…');
   gs('updateSystemSettings',[TOKEN,p],r=>{

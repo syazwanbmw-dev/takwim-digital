@@ -21,7 +21,10 @@ const DEFAULT_CONFIG = {
   // MAX_PENDING_REGISTRATIONS: siling keras jumlah akaun 'pending' serentak.
   // MAX_REGISTRATIONS_PER_MINUTE: throttle letusan merentas SEMUA pengguna.
   MAX_PENDING_REGISTRATIONS: 50,
-  MAX_REGISTRATIONS_PER_MINUTE: 10
+  MAX_REGISTRATIONS_PER_MINUTE: 10,
+  // Jam (0-23) trigger sendActivityReminders_ jalan setiap hari. Boleh admin ubah
+  // via System Settings -- lihat syncReminderTrigger_() untuk cara ia diguna pakai.
+  REMINDER_HOUR: 7
 };
 
 function getConfig_() {
@@ -46,6 +49,13 @@ function validateHexColor_(hex) {
   return /^#[0-9a-fA-F]{6}$/.test(String(hex || '').trim());
 }
 
+// Had 0-23 (jam sehari) -- pagar nilai dari client, fallback default kalau rosak/tiada.
+function clampReminderHour_(value) {
+  const n = parseInt(value, 10);
+  if (isNaN(n) || n < 0) return DEFAULT_CONFIG.REMINDER_HOUR;
+  return n > 23 ? 23 : n;
+}
+
 function validateSetupInput_(input) {
   input = input || {};
   const cfg = {
@@ -59,7 +69,8 @@ function validateSetupInput_(input) {
     ALLOW_REGISTRATION: input.allowRegistration !== false,
     FOOTER_TEXT: String(input.footerText || '').trim().slice(0, 180),
     ICON_URL: String(input.iconUrl || '').trim().slice(0, 500),
-    ALLOWED_EMAIL_DOMAINS: parseDomainList_(input.allowedEmailDomains).slice(0, 20).join(',')
+    ALLOWED_EMAIL_DOMAINS: parseDomainList_(input.allowedEmailDomains).slice(0, 20).join(','),
+    REMINDER_HOUR: clampReminderHour_(input.reminderHour !== undefined ? input.reminderHour : DEFAULT_CONFIG.REMINDER_HOUR)
   };
 
   if (!cfg.APP_NAME || !cfg.OFFICE_NAME || !cfg.SHORT_NAME || !cfg.CALENDAR_ID || !cfg.ADMIN_EMAIL) {
@@ -142,6 +153,7 @@ function installSystem(input) {
 
   ensureSecuritySalt_();
   ensureAdminRecord_();
+  syncReminderTrigger_(finalCfg.REMINDER_HOUR);
   addAudit_('SYSTEM_INSTALLED', finalCfg.APP_NAME + ' | ' + finalCfg.OFFICE_NAME, finalCfg.ADMIN_EMAIL);
 
   return {
@@ -165,7 +177,8 @@ function getSystemSettings(token) {
     allowRegistration: cfg.ALLOW_REGISTRATION,
     footerText: cfg.FOOTER_TEXT,
     iconUrl: cfg.ICON_URL,
-    allowedEmailDomains: cfg.ALLOWED_EMAIL_DOMAINS
+    allowedEmailDomains: cfg.ALLOWED_EMAIL_DOMAINS,
+    reminderHour: cfg.REMINDER_HOUR
   };
 }
 
@@ -183,7 +196,8 @@ function updateSystemSettings(token, input) {
     allowRegistration: input.allowRegistration !== false,
     footerText: input.footerText !== undefined ? input.footerText : current.FOOTER_TEXT,
     iconUrl: input.iconUrl !== undefined ? input.iconUrl : current.ICON_URL,
-    allowedEmailDomains: input.allowedEmailDomains !== undefined ? input.allowedEmailDomains : current.ALLOWED_EMAIL_DOMAINS
+    allowedEmailDomains: input.allowedEmailDomains !== undefined ? input.allowedEmailDomains : current.ALLOWED_EMAIL_DOMAINS,
+    reminderHour: input.reminderHour !== undefined ? input.reminderHour : current.REMINDER_HOUR
   };
   const next = Object.assign({}, DEFAULT_CONFIG, validateSetupInput_(mergedInput));
 
@@ -191,6 +205,7 @@ function updateSystemSettings(token, input) {
   if (!cal) throw new Error('Calendar ID baharu tidak dapat diakses.');
 
   PropertiesService.getScriptProperties().setProperty('APP_CONFIG_V3', JSON.stringify(next));
+  syncReminderTrigger_(next.REMINDER_HOUR);
   addAudit_('SYSTEM_SETTINGS_UPDATED', next.APP_NAME + ' | ' + next.OFFICE_NAME, admin.user.email);
   return { success: true, message: 'Tetapan sistem dikemaskini.', config: getBootstrapState().config };
 }
@@ -1597,13 +1612,26 @@ function buildReminderDigestText_(events, unsent) {
 // Jalankan SEKALI SAHAJA dari Apps Script Editor (Run) selepas deploy code ni --
 // clasp push/deploy TAK automatik cipta trigger. Idempotent: selamat dijalankan
 // berkali-kali, tak akan duplicate trigger.
-function installReminderTrigger_() {
-  const exists = ScriptApp.getProjectTriggers().some(function(t) {
-    return t.getHandlerFunction() === 'sendActivityReminders_';
+// Padam SEMUA trigger sendActivityReminders_ sedia ada, cipta SATU baharu ikut jam
+// (0-23) yang diberi. Idempotent -- selamat dipanggil berkali-kali, tak akan
+// bertambah trigger. Dipanggil AUTOMATIK oleh installSystem()/updateSystemSettings()
+// setiap kali System Settings disimpan, supaya jadual reminder sentiasa padan
+// REMINDER_HOUR terkini tanpa admin perlu masuk Apps Script Editor langsung.
+function syncReminderTrigger_(hour) {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'sendActivityReminders_') ScriptApp.deleteTrigger(t);
   });
-  if (exists) return 'Trigger dah wujud, tiada tindakan.';
-  ScriptApp.newTrigger('sendActivityReminders_').timeBased().everyDays(1).atHour(7).create();
-  return 'Trigger baharu dicipta -- jalan setiap hari lebih kurang 7 pagi.';
+  ScriptApp.newTrigger('sendActivityReminders_').timeBased().everyDays(1).atHour(clampReminderHour_(hour)).create();
+}
+
+// Bootstrap MANUAL dari Apps Script Editor (Run) -- HANYA perlu sekali untuk
+// sistem yang dipasang SEBELUM ciri jam-boleh-tukar ni wujud (trigger belum
+// pernah dicipta). Sistem baharu / lepas System Settings pertama kali disimpan
+// dah auto-dapat trigger via syncReminderTrigger_(), tak perlu fungsi ni lagi.
+function installReminderTrigger_() {
+  const hour = getConfig_().REMINDER_HOUR;
+  syncReminderTrigger_(hour);
+  return 'Trigger direset -- jalan setiap hari lebih kurang jam ' + String(hour).padStart(2, '0') + ':00.';
 }
 
 function escapeHtmlServer_(s) {
@@ -1692,6 +1720,11 @@ function selfTestReminderHelpers_() {
   ok('clampReminderDays_ > 3 dipotong ke 3', clampReminderDays_('99') === 3);
   ok('clampReminderDays_ negatif/rosak -> 0', clampReminderDays_('-5') === 0 && clampReminderDays_('abc') === 0);
   ok('clampReminderDays_ kosong/null -> 0', clampReminderDays_('') === 0 && clampReminderDays_(null) === 0);
+
+  ok('clampReminderHour_ dalam julat kekal', clampReminderHour_(6) === 6 && clampReminderHour_('23') === 23);
+  ok('clampReminderHour_ > 23 dipotong ke 23', clampReminderHour_(99) === 23);
+  ok('clampReminderHour_ negatif/rosak -> default', clampReminderHour_(-1) === DEFAULT_CONFIG.REMINDER_HOUR && clampReminderHour_('abc') === DEFAULT_CONFIG.REMINDER_HOUR);
+  ok('clampReminderHour_ 0 KEKAL 0 (bukan default) -- 0 nilai sah, bukan "kosong"', clampReminderHour_(0) === 0);
 
   const desc = buildDescription_({ description: 'Ceramah motivasi', pic: 'Cikgu Ali', agency: 'JPN', reminderDays: '2' }, 'taklimat');
   ok('buildDescription_ sertakan baris Reminder', desc.indexOf('Reminder: 2') !== -1);
