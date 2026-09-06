@@ -1801,6 +1801,34 @@ function digestDateLabel_(e) {
   return isSameCalDay_(start, end) ? label : label + ' – ' + digestDateLong_(end);
 }
 
+// Teks BIASA tulen. Satu FORMAT dipakai kedua-dua sink, tetapi fungsi ni dipanggil
+// SEKALI PER SINK: pemanggil (sendWeeklyDigest_) yang menapis senarai aktiviti untuk
+// saluran berkenaan, jadi kandungan dua mesej memang boleh berbeza. Fungsi ni sendiri
+// tidak tahu apa-apa tentang saluran -- itu yang menjadikannya sink-agnostik.
+// Tiada HTML, tiada markdown -- markup yang salah pada satu sink akan muncul sebagai
+// sampah pada sink satu lagi.
+// Kandungan SENGAJA hanya tajuk / tarikh / lokasi. Jangan sesekali tambah PIC,
+// agensi, keterangan dalaman atau senarai penerima di sini: penerima ialah group
+// ibu bapa dan Space murid, bukan bilik guru.
+function buildDigestText_(events, cfg) {
+  const lines = [];
+  lines.push('📅 Aktiviti Sekolah — Minggu Ini');
+  const office = (cfg && cfg.OFFICE_NAME) ? String(cfg.OFFICE_NAME) : '';
+  if (office) lines.push(office);
+  lines.push('');
+
+  // slice() dulu: jangan susun semula array milik pemanggil.
+  events.slice().sort(sortByStart_).forEach(function (e) {
+    lines.push('• ' + e.title);
+    lines.push('  ' + digestDateLabel_(e) + ' · ' + (e.location ? e.location : '—'));
+    lines.push('');
+  });
+
+  lines.push('—');
+  lines.push('Mesej automatik daripada sistem takwim sekolah. Sila jangan balas.');
+  return lines.join('\n');
+}
+
 /* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.
@@ -2006,6 +2034,48 @@ function selfTestDigestHelpers_() {
      DIGEST_DAY_MS[0] === 'Ahad' && DIGEST_DAY_MS[6] === 'Sabtu' && DIGEST_DAY_MS.length === 7);
   ok('DIGEST_MONTH_MS 12 bulan Melayu penuh',
      DIGEST_MONTH_MS.length === 12 && DIGEST_MONTH_MS[0] === 'Januari' && DIGEST_MONTH_MS[11] === 'Disember');
+
+  const cfgUji = { OFFICE_NAME: 'Sekolah Kebangsaan Salor' };
+  const evUji = [
+    { title: 'Minggu Bahasa', location: 'Dewan Sekolah', allDay: false,
+      start: new Date(2026, 8, 9, 8, 0).toISOString(), end: new Date(2026, 8, 11, 17, 0).toISOString(),
+      pic: 'Cikgu Ali', agency: 'JPN Kelantan', description: 'nota dalaman rahsia',
+      remindTo: ['guru@sekolah.edu.my'], reminderDays: 2, categoryLabel: 'Program' },
+    { title: 'Hari Sukan Sekolah', location: 'Padang Sekolah', allDay: false,
+      start: new Date(2026, 8, 7, 7, 30).toISOString(), end: new Date(2026, 8, 7, 13, 0).toISOString(),
+      pic: '', agency: '', description: '', remindTo: [], reminderDays: 0, categoryLabel: 'Program' },
+    { title: 'Gotong-royong Perdana', location: '', allDay: false,
+      start: new Date(2026, 8, 12, 8, 0).toISOString(), end: new Date(2026, 8, 12, 12, 0).toISOString(),
+      pic: '', agency: '', description: '', remindTo: [], reminderDays: 0, categoryLabel: 'Program' }
+  ];
+  const teks = buildDigestText_(evUji, cfgUji);
+
+  ok('buildDigestText_ baris pertama tajuk digest',
+     teks.split('\n')[0] === '📅 Aktiviti Sekolah — Minggu Ini');
+  ok('buildDigestText_ baris kedua OFFICE_NAME', teks.split('\n')[1] === 'Sekolah Kebangsaan Salor');
+  ok('buildDigestText_ SUSUN ikut tarikh menaik (bukan susunan input)',
+     teks.indexOf('Hari Sukan') < teks.indexOf('Minggu Bahasa') &&
+     teks.indexOf('Minggu Bahasa') < teks.indexOf('Gotong-royong'));
+  ok('buildDigestText_ setiap aktiviti guna bullet + indent dua ruang',
+     teks.indexOf('• Hari Sukan Sekolah\n  Isnin, 7 September 2026 · Padang Sekolah') !== -1);
+  ok('buildDigestText_ julat pelbagai hari dipapar penuh',
+     teks.indexOf('  Rabu, 9 September 2026 – Jumaat, 11 September 2026 · Dewan Sekolah') !== -1);
+  ok('buildDigestText_ lokasi kosong -> em-dash', teks.indexOf('· —') !== -1);
+  ok('buildDigestText_ tutup dengan nota automatik',
+     teks.indexOf('—\nMesej automatik daripada sistem takwim sekolah. Sila jangan balas.') !== -1);
+
+  // Gerbang KEBOCORAN: audiens ialah ibu bapa & murid di luar domain sekolah.
+  ok('buildDigestText_ TIDAK bocorkan PIC/agensi/nota dalaman/penerima',
+     teks.indexOf('Cikgu Ali') === -1 && teks.indexOf('JPN Kelantan') === -1 &&
+     teks.indexOf('nota dalaman') === -1 && teks.indexOf('guru@sekolah.edu.my') === -1 &&
+     teks.indexOf('PIC') === -1 && teks.indexOf('Agensi') === -1);
+  ok('buildDigestText_ TIADA markup Telegram/Chat (teks biasa tulen)',
+     teks.indexOf('<b>') === -1 && teks.indexOf('**') === -1 && teks.indexOf('_') === -1);
+
+  ok('buildDigestText_ senarai kosong tetap pulang string (caller yang guard)',
+     typeof buildDigestText_([], cfgUji) === 'string');
+  ok('buildDigestText_ cfg tanpa OFFICE_NAME tak pancarkan "undefined"',
+     buildDigestText_(evUji, {}).indexOf('undefined') === -1);
 
   const summary = results.join('\n');
   Logger.log(summary);
