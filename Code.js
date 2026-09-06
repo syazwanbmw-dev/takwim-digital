@@ -1203,6 +1203,11 @@ function holidayToObject_(event) {
     remindTo: [],
     pic: '',
     agency: '',
+    // Cuti Google datang dari kalendar LUAR yang kita tak boleh tanda. Bentuk objek
+    // kekal sama dengan eventToObject_ sebab dashboard gabungkan dua senarai ni --
+    // dan penapis saluran dalam sendWeeklyDigest_ memanggil .indexOf() terus atas
+    // medan ni, jadi ia mesti array, bukan undefined.
+    shareChannels: [],
     isHoliday: true
   };
 }
@@ -1244,7 +1249,8 @@ function eventToObject_(event) {
     reminderDays: meta.reminderDays,
     remindTo: meta.remindTo,
     pic: meta.pic,
-    agency: meta.agency
+    agency: meta.agency,
+    shareChannels: meta.shareChannels
   };
 }
 
@@ -1270,6 +1276,15 @@ function buildDescription_(payload, category) {
   if (reminderDays > 0) parts.push('Reminder: ' + reminderDays);
   const remindTo = normalizeRemindToList_(payload.remindTo);
   if (remindTo.length) parts.push('RemindTo: ' + remindTo.join(','));
+  // Penanda perkongsian: SENARAI saluran yang aktiviti ni dibenarkan keluar.
+  // Dua checkbox BEBAS di borang -- guru boleh hantar ke Telegram sahaja, Chat
+  // sahaja, atau kedua-dua. Susunan TETAP (tg dahulu) supaya baris kanonik.
+  // Perbandingan === true (bukan truthy) supaya string 'false' atau nombor 1 dari
+  // client tak tersalah menghidupkan saluran KELUAR domain sekolah.
+  const saluran = [];
+  if (payload.shareTg === true) saluran.push('tg');
+  if (payload.shareGchat === true) saluran.push('gchat');
+  if (saluran.length) parts.push('Kongsi: ' + saluran.join(','));
   parts.push('[PPD_CATEGORY:' + category + ']');
   return parts.join('\n');
 }
@@ -1281,7 +1296,10 @@ function parseDescriptionMeta_(description) {
   const reminderDays = reminderMatch ? clampReminderDays_(reminderMatch[1]) : 0;
   const remindToMatch = description.match(/(?:^|\n)RemindTo:\s*(.+)/i);
   const remindTo = remindToMatch ? normalizeRemindToList_(remindToMatch[1]) : [];
-  return { pic: pic, agency: agency, reminderDays: reminderDays, remindTo: remindTo };
+  return {
+    pic: pic, agency: agency, reminderDays: reminderDays, remindTo: remindTo,
+    shareChannels: parseShareChannels_(description)
+  };
 }
 
 // Had H-1/H-2/H-3 sahaja (padan pilihan dropdown UI) -- pagar nilai dari client
@@ -1313,6 +1331,10 @@ function cleanDescription_(description) {
     .replace(/\n?Agensi:\s*.+/ig, '')
     .replace(/\n?Reminder:\s*\d+/ig, '')
     .replace(/\n?RemindTo:\s*.+/ig, '')
+    // Buang baris Kongsi dari paparan: kalau tak, penanda muncul dalam kotak
+    // KETERANGAN bila guru edit, kemudian ditulis semula sebagai teks biasa --
+    // penanda berganda, dan aktiviti kekal "dikongsi" walau checkbox dibuang.
+    .replace(/\n?Kongsi:\s*.+/ig, '')
     .trim();
 }
 
@@ -2076,6 +2098,72 @@ function selfTestDigestHelpers_() {
      typeof buildDigestText_([], cfgUji) === 'string');
   ok('buildDigestText_ cfg tanpa OFFICE_NAME tak pancarkan "undefined"',
      buildDigestText_(evUji, {}).indexOf('undefined') === -1);
+
+  const descDua = buildDescription_({
+    description: 'Perhimpunan bulanan', pic: 'Cikgu Ali', agency: 'PIBG',
+    reminderDays: '2', remindTo: ['a@x.com'], shareTg: true, shareGchat: true
+  }, 'program');
+  ok('buildDescription_ dua saluran -> "Kongsi: tg,gchat"',
+     /(?:^|\n)Kongsi: tg,gchat(?:\n|$)/.test(descDua));
+  ok('buildDescription_ letak Kongsi SELEPAS RemindTo dan SEBELUM PPD_CATEGORY',
+     descDua.indexOf('RemindTo:') < descDua.indexOf('Kongsi:') &&
+     descDua.indexOf('Kongsi:') < descDua.indexOf('[PPD_CATEGORY:'));
+  ok('buildDescription_ medan LAMA tak terjejas',
+     descDua.indexOf('PIC: Cikgu Ali') !== -1 && descDua.indexOf('Agensi: PIBG') !== -1 &&
+     descDua.indexOf('Reminder: 2') !== -1 && descDua.indexOf('RemindTo: a@x.com') !== -1);
+
+  const descTg = buildDescription_({ description: 'Sukan', shareTg: true }, 'program');
+  const descGchat = buildDescription_({ description: 'Kuiz', shareGchat: true }, 'program');
+  ok('buildDescription_ SATU saluran sahaja -> senarai satu nama',
+     /(?:^|\n)Kongsi: tg(?:\n|$)/.test(descTg) && /(?:^|\n)Kongsi: gchat(?:\n|$)/.test(descGchat));
+  ok('buildDescription_ susunan TETAP tg dahulu walau hanya gchat ditanda dulu',
+     buildDescription_({ shareGchat: true, shareTg: true }, 'lain').indexOf('Kongsi: tg,gchat') !== -1);
+
+  ok('parseDescriptionMeta_ round-trip shareChannels dua saluran',
+     eq(parseDescriptionMeta_(descDua).shareChannels, ['tg', 'gchat']));
+  ok('parseDescriptionMeta_ round-trip satu saluran (tidak bocor ke saluran lain)',
+     eq(parseDescriptionMeta_(descTg).shareChannels, ['tg']) &&
+     eq(parseDescriptionMeta_(descGchat).shareChannels, ['gchat']));
+  ok('parseDescriptionMeta_ medan lama masih round-trip selepas Kongsi ditambah',
+     parseDescriptionMeta_(descDua).pic === 'Cikgu Ali' &&
+     parseDescriptionMeta_(descDua).reminderDays === 2 &&
+     eq(parseDescriptionMeta_(descDua).remindTo, ['a@x.com']));
+
+  const descTiada = buildDescription_({ description: 'Mesyuarat panitia', pic: 'Cikgu Siti' }, 'mesyuarat');
+  ok('buildDescription_ TIADA baris Kongsi bila tiada checkbox ditanda (lalai OFF)',
+     descTiada.indexOf('Kongsi') === -1);
+  ok('parseDescriptionMeta_ tiada baris Kongsi -> []',
+     eq(parseDescriptionMeta_(descTiada).shareChannels, []));
+  ok('buildDescription_ nilai palsu-truthy dari client TIDAK menghidupkan saluran',
+     buildDescription_({ shareTg: 'false' }, 'lain').indexOf('Kongsi') === -1 &&
+     buildDescription_({ shareGchat: 1 }, 'lain').indexOf('Kongsi') === -1 &&
+     buildDescription_({ shareTg: 'tg' }, 'lain').indexOf('Kongsi') === -1);
+
+  // Kalau cleanDescription_ tak buang baris ni, penanda akan muncul dalam kotak
+  // KETERANGAN bila guru edit, kemudian ditulis semula sebagai teks biasa --
+  // penanda berganda, dan aktiviti kekal "dikongsi" walau checkbox dibuang.
+  ok('cleanDescription_ buang baris Kongsi dari paparan',
+     cleanDescription_(descDua).indexOf('Kongsi') === -1 &&
+     cleanDescription_(descDua) === 'Perhimpunan bulanan');
+  ok('round-trip PENUH: tanda dua -> baca -> bina semula tanpa saluran -> tidak lagi dikongsi',
+     (function () {
+       const meta = parseDescriptionMeta_(descDua);
+       const semula = buildDescription_({
+         description: cleanDescription_(descDua), pic: meta.pic, agency: meta.agency,
+         reminderDays: meta.reminderDays, remindTo: meta.remindTo,
+         shareTg: false, shareGchat: false
+       }, 'program');
+       return eq(parseDescriptionMeta_(semula).shareChannels, []) && semula.indexOf('Kongsi') === -1;
+     })());
+  ok('round-trip SEPARA: buang satu saluran sahaja, satu lagi KEKAL',
+     (function () {
+       const meta = parseDescriptionMeta_(descDua);
+       const semula = buildDescription_({
+         description: cleanDescription_(descDua), pic: meta.pic,
+         shareTg: false, shareGchat: true
+       }, 'program');
+       return eq(parseDescriptionMeta_(semula).shareChannels, ['gchat']);
+     })());
 
   const summary = results.join('\n');
   Logger.log(summary);
