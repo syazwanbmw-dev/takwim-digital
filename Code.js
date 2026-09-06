@@ -722,7 +722,6 @@ function createCalendarEvent(token, payload) {
   );
 
   event.setColor(CATEGORY_CONFIG[category].color);
-  applyReminder_(event, payload.reminderMinutes);
 
   addAudit_('EVENT_CREATED', event.getTitle(), session.user.email);
   return { success: true, message: 'Aktiviti berjaya ditambah.', event: eventToObject_(event) };
@@ -749,7 +748,9 @@ function updateCalendarEvent(token, payload) {
   event.setLocation(String(payload.location || '').trim());
   event.setDescription(buildDescription_(payload, category));
   event.setColor(CATEGORY_CONFIG[category].color);
-  applyReminder_(event, payload.reminderMinutes);
+  // Bersihkan popup reminder lama (sistem reminder dulu) -- migrasi ke email digest,
+  // event lama yang masih ada popup Calendar tak patut kekal bila diedit lagi.
+  try { event.removeAllReminders(); } catch (e) {}
 
   addAudit_('EVENT_UPDATED', oldTitle + ' → ' + event.getTitle(), session.user.email);
   return { success: true, message: 'Aktiviti berjaya dikemaskini.', event: eventToObject_(event) };
@@ -826,13 +827,8 @@ function duplicateCalendarEvent(token, payload) {
   );
 
   try { clone.setColor(source.getColor()); } catch (e) {}
-
-  try {
-    const popup = source.getPopupReminders() || [];
-    popup.forEach(function(minutes) {
-      if (minutes >= 5 && minutes <= 40320) clone.addPopupReminder(minutes);
-    });
-  } catch (e) {}
+  // Nota: reminderDays (email) ikut serta AUTOMATIK sebab description disalin terus
+  // (baris 825) -- tiada popup Calendar untuk clone lagi sejak migrasi ke email digest.
 
   addAudit_(
     'EVENT_DUPLICATED',
@@ -1149,7 +1145,7 @@ function holidayToObject_(event) {
     category: 'cuti',
     categoryLabel: CATEGORY_CONFIG.cuti.label,
     hasReminder: false,
-    reminderMinutes: 0,
+    reminderDays: 0,
     pic: '',
     agency: '',
     isHoliday: true
@@ -1179,11 +1175,6 @@ function eventToObject_(event) {
   const category = getCategory_(event, description);
   const meta = parseDescriptionMeta_(description);
 
-  let popup = [];
-  let email = [];
-  try { popup = event.getPopupReminders() || []; } catch (e) {}
-  try { email = event.getEmailReminders() || []; } catch (e) {}
-
   return {
     id: event.getId(),
     title: event.getTitle() || '(Tanpa tajuk)',
@@ -1194,8 +1185,8 @@ function eventToObject_(event) {
     allDay: event.isAllDayEvent(),
     category: category,
     categoryLabel: CATEGORY_CONFIG[category].label,
-    hasReminder: popup.length > 0 || email.length > 0,
-    reminderMinutes: popup.length ? popup[0] : 0,
+    hasReminder: meta.reminderDays > 0,
+    reminderDays: meta.reminderDays,
     pic: meta.pic,
     agency: meta.agency
   };
@@ -1219,6 +1210,8 @@ function buildDescription_(payload, category) {
   if (payload.description) parts.push(String(payload.description).trim());
   if (payload.pic) parts.push('PIC: ' + String(payload.pic).trim());
   if (payload.agency) parts.push('Agensi: ' + String(payload.agency).trim());
+  const reminderDays = clampReminderDays_(payload.reminderDays);
+  if (reminderDays > 0) parts.push('Reminder: ' + reminderDays);
   parts.push('[PPD_CATEGORY:' + category + ']');
   return parts.join('\n');
 }
@@ -1226,7 +1219,17 @@ function buildDescription_(payload, category) {
 function parseDescriptionMeta_(description) {
   const pic = (description.match(/(?:^|\n)PIC:\s*(.+)/i) || [,''])[1].trim();
   const agency = (description.match(/(?:^|\n)Agensi:\s*(.+)/i) || [,''])[1].trim();
-  return { pic: pic, agency: agency };
+  const reminderMatch = description.match(/(?:^|\n)Reminder:\s*(\d+)/i);
+  const reminderDays = reminderMatch ? clampReminderDays_(reminderMatch[1]) : 0;
+  return { pic: pic, agency: agency, reminderDays: reminderDays };
+}
+
+// Had H-1/H-2/H-3 sahaja (padan pilihan dropdown UI) -- pagar nilai dari client
+// yang boleh dimanipulasi (console/API terus), bukan cuma bergantung dropdown.
+function clampReminderDays_(value) {
+  const n = parseInt(value || 0, 10);
+  if (isNaN(n) || n < 0) return 0;
+  return n > 3 ? 3 : n;
 }
 
 function cleanDescription_(description) {
@@ -1234,13 +1237,8 @@ function cleanDescription_(description) {
     .replace(/\n?\[PPD_CATEGORY:[a-z]+\]/ig, '')
     .replace(/\n?PIC:\s*.+/ig, '')
     .replace(/\n?Agensi:\s*.+/ig, '')
+    .replace(/\n?Reminder:\s*\d+/ig, '')
     .trim();
-}
-
-function applyReminder_(event, reminderMinutes) {
-  const minutes = parseInt(reminderMinutes || 0, 10);
-  event.removeAllReminders();
-  if (minutes >= 5 && minutes <= 40320) event.addPopupReminder(minutes);
 }
 
 function validateEventPayload_(payload) {
@@ -1378,6 +1376,118 @@ function notifyAdminNewRegistration_(user, pendingTotal) {
   }
 }
 
+/* =========================================================
+   PERINGATAN AKTIVITI -- Email Digest Harian
+   Dipanggil oleh trigger time-driven (lihat installReminderTrigger_), BUKAN client.
+   Reka bentuk: SATU email SEHARI (bukan satu per aktiviti) gabung semua aktiviti
+   yang jatuh TEPAT H-1/H-2/H-3 (ikut reminderDays dipilih bila aktiviti
+   ditambah/diedit). Cuti Google Malaysia (getHolidayEvents_) tak pernah masuk sini
+   sebab ia dari calendar berasingan -- fungsi ni cuma scan calendar KERJA.
+   ========================================================= */
+function sendActivityReminders_() {
+  try {
+    const cfg = getConfig_();
+    if (!cfg.ADMIN_EMAIL) return;
+    const cal = getPPDCalendar_();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(today);
+    rangeEnd.setDate(rangeEnd.getDate() + 4);
+
+    const due = safeGetEvents_(cal, today, rangeEnd)
+      .map(eventToObject_)
+      .filter(function(e) { return isReminderDayMatch_(e, today) && !isReminderSent_(e.id); });
+
+    if (!due.length) return;
+
+    const users = getUsers_();
+    const recipients = Object.keys(users)
+      .map(function(email) { return users[email]; })
+      .filter(function(u) { return u.status === 'approved' && u.email !== cfg.ADMIN_EMAIL; })
+      .map(function(u) { return u.email; });
+    if (!recipients.length) return;
+
+    MailApp.sendEmail({
+      to: cfg.ADMIN_EMAIL,
+      bcc: recipients.join(','),
+      subject: 'Peringatan Aktiviti — ' + cfg.APP_NAME,
+      name: cfg.SHORT_NAME + ' Calendar',
+      htmlBody: buildReminderDigestHtml_(due, cfg),
+      body: buildReminderDigestText_(due)
+    });
+
+    due.forEach(function(e) { markReminderSent_(e.id); });
+  } catch (e) {
+    addAudit_('REMINDER_DIGEST_FAILED', e.message, getConfig_().ADMIN_EMAIL);
+  }
+}
+
+// Pure -- kira sama ada aktiviti jatuh TEPAT pada hari H-nya. Diuji dalam
+// selfTestReminderHelpers_(). Semakan "dah hantar" (isReminderSent_) SENGAJA
+// berasingan sebab tu stateful (PropertiesService), bukan logik tarikh.
+function isReminderDayMatch_(event, today) {
+  if (!event.reminderDays) return false;
+  const startDay = new Date(event.start);
+  startDay.setHours(0, 0, 0, 0);
+  const diff = Math.round((startDay - today) / 86400000);
+  return diff === event.reminderDays;
+}
+
+function isReminderSent_(eventId) {
+  return !!PropertiesService.getScriptProperties().getProperty('RSENT_' + eventId);
+}
+
+function markReminderSent_(eventId) {
+  PropertiesService.getScriptProperties().setProperty('RSENT_' + eventId, String(Date.now()));
+}
+
+function buildReminderDigestHtml_(events, cfg) {
+  const cards = events.map(function(e) {
+    const rows = [];
+    rows.push(reminderRow_('Tarikh', formatDate_(new Date(e.start), 'EEEE, d MMMM yyyy')));
+    rows.push(reminderRow_('Lagi', e.reminderDays + ' hari lagi'));
+    if (e.location) rows.push(reminderRow_('Lokasi', e.location));
+    if (e.pic) rows.push(reminderRow_('PIC', e.pic));
+    if (e.agency) rows.push(reminderRow_('Agensi', e.agency));
+    return '<div style="border-left:4px solid ' + cfg.THEME_COLOR + ';padding:8px 12px;margin:10px 0;background:#f7f9fc">' +
+      '<p style="margin:0 0 6px;font-weight:bold;font-size:15px">' + escapeHtmlServer_(e.title) +
+      ' <span style="font-weight:normal;color:#6f7f93">(' + escapeHtmlServer_(e.categoryLabel) + ')</span></p>' +
+      '<table style="border-collapse:collapse;font-size:14px">' + rows.join('') + '</table>' +
+      '</div>';
+  }).join('');
+
+  return '<div style="font-family:Arial,sans-serif">' +
+    '<h2 style="color:' + cfg.THEME_COLOR + '">Peringatan Aktiviti Akan Datang</h2>' +
+    '<p>Salam sejahtera,</p>' +
+    '<p>Berikut aktiviti berjadual dalam <strong>' + escapeHtmlServer_(cfg.APP_NAME) + '</strong> yang akan berlangsung tidak lama lagi:</p>' +
+    cards +
+    '<p style="color:#6f7f93;font-size:12px">Emel ini dihantar automatik oleh sistem ' + escapeHtmlServer_(cfg.APP_NAME) + '. Sila jangan balas emel ini.</p>' +
+    '</div>';
+}
+
+function reminderRow_(label, val) {
+  return '<tr><td style="padding:2px 10px 2px 0"><strong>' + label + '</strong></td>' +
+         '<td style="padding:2px 0">' + escapeHtmlServer_(val) + '</td></tr>';
+}
+
+function buildReminderDigestText_(events) {
+  return 'Peringatan Aktiviti:\n' + events.map(function(e) {
+    return '- ' + e.title + ' (' + e.reminderDays + ' hari lagi, ' + formatDate_(new Date(e.start), 'd MMMM yyyy') + ')';
+  }).join('\n');
+}
+
+// Jalankan SEKALI SAHAJA dari Apps Script Editor (Run) selepas deploy code ni --
+// clasp push/deploy TAK automatik cipta trigger. Idempotent: selamat dijalankan
+// berkali-kali, tak akan duplicate trigger.
+function installReminderTrigger_() {
+  const exists = ScriptApp.getProjectTriggers().some(function(t) {
+    return t.getHandlerFunction() === 'sendActivityReminders_';
+  });
+  if (exists) return 'Trigger dah wujud, tiada tindakan.';
+  ScriptApp.newTrigger('sendActivityReminders_').timeBased().everyDays(1).atHour(7).create();
+  return 'Trigger baharu dicipta -- jalan setiap hari lebih kurang 7 pagi.';
+}
+
 function escapeHtmlServer_(s) {
   return String(s || '').replace(/[&<>"']/g, function(c) {
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
@@ -1447,6 +1557,43 @@ function selfTestRegHelpers_() {
   ok('domain: luar senarai = tolak', !domainAllowed('moe-dl.edu.my', 'orang@gmail.com'));
   ok('domain: subdomain TIDAK auto-lulus (padanan tepat)',
      !domainAllowed('moe-dl.edu.my', 'x@student.moe-dl.edu.my'));
+
+  const summary = results.join('\n');
+  Logger.log(summary);
+  const failed = results.filter(function (r) { return r.indexOf('FAIL') === 0; }).length;
+  if (failed) throw new Error(failed + ' ujian GAGAL:\n' + summary);
+  return summary;
+}
+
+function selfTestReminderHelpers_() {
+  const results = [];
+  function ok(name, cond) { results.push((cond ? 'PASS' : 'FAIL') + ' :: ' + name); }
+
+  ok('clampReminderDays_ dalam julat kekal', clampReminderDays_('2') === 2);
+  ok('clampReminderDays_ > 3 dipotong ke 3', clampReminderDays_('99') === 3);
+  ok('clampReminderDays_ negatif/rosak -> 0', clampReminderDays_('-5') === 0 && clampReminderDays_('abc') === 0);
+  ok('clampReminderDays_ kosong/null -> 0', clampReminderDays_('') === 0 && clampReminderDays_(null) === 0);
+
+  const desc = buildDescription_({ description: 'Ceramah motivasi', pic: 'Cikgu Ali', agency: 'JPN', reminderDays: '2' }, 'taklimat');
+  ok('buildDescription_ sertakan baris Reminder', desc.indexOf('Reminder: 2') !== -1);
+  const meta = parseDescriptionMeta_(desc);
+  ok('parseDescriptionMeta_ round-trip reminderDays', meta.reminderDays === 2);
+  ok('parseDescriptionMeta_ round-trip pic/agency kekal', meta.pic === 'Cikgu Ali' && meta.agency === 'JPN');
+
+  const descNoReminder = buildDescription_({ pic: 'Cikgu Ali' }, 'program');
+  ok('buildDescription_ reminderDays=0 -> tiada baris Reminder', descNoReminder.indexOf('Reminder:') === -1);
+  ok('parseDescriptionMeta_ tiada baris Reminder -> 0', parseDescriptionMeta_(descNoReminder).reminderDays === 0);
+  ok('cleanDescription_ buang baris Reminder dari paparan', cleanDescription_(desc).indexOf('Reminder') === -1);
+
+  const today = new Date(2026, 8, 6);
+  today.setHours(0, 0, 0, 0);
+  function dayOffset(n) { const d = new Date(today); d.setDate(d.getDate() + n); return d.toISOString(); }
+  ok('isReminderDayMatch_ tepat H-3 padan', isReminderDayMatch_({ start: dayOffset(3), reminderDays: 3 }, today));
+  ok('isReminderDayMatch_ H-2 tak padan bila reminderDays=3', !isReminderDayMatch_({ start: dayOffset(2), reminderDays: 3 }, today));
+  ok('isReminderDayMatch_ reminderDays=0 -> false', !isReminderDayMatch_({ start: dayOffset(1), reminderDays: 0 }, today));
+  ok('isReminderDayMatch_ event dah lepas -> false', !isReminderDayMatch_({ start: dayOffset(-1), reminderDays: 1 }, today));
+  ok('isReminderDayMatch_ diff LEBIH BESAR dari reminderDays -> false (padanan TEPAT, bukan >=)',
+     !isReminderDayMatch_({ start: dayOffset(5), reminderDays: 3 }, today));
 
   const summary = results.join('\n');
   Logger.log(summary);

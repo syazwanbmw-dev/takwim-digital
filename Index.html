@@ -264,7 +264,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
       <div class="field"><label>TAMAT</label><input id="eventEnd" type="datetime-local"></div>
       <div class="field wide"><label>LOKASI</label><input id="eventLocation"></div>
       <div class="field"><label>KATEGORI</label><select id="eventCategory"><option value="program">Program</option><option value="mesyuarat">Mesyuarat</option><option value="lawatan">Lawatan</option><option value="taklimat">Taklimat</option><option value="deadline">Deadline</option><option value="lain">Lain-lain</option></select></div>
-      <div class="field"><label>REMINDER</label><select id="eventReminder"><option value="0">Tiada</option><option value="30">30 minit</option><option value="60">1 jam</option><option value="180">3 jam</option><option value="1440">1 hari</option></select></div>
+      <div class="field"><label>REMINDER EMAIL</label><select id="eventReminder"><option value="0">Tiada</option><option value="1">H-1 (1 hari sebelum)</option><option value="2">H-2 (2 hari sebelum)</option><option value="3">H-3 (3 hari sebelum)</option></select></div>
       <div class="field"><label>PIC</label><input id="eventPic"></div>
       <div class="field"><label>AGENSI</label><input id="eventAgency"></div>
       <div class="field wide"><label>KETERANGAN</label><textarea id="eventDescription"></textarea></div>
@@ -795,9 +795,9 @@ function openEventForm(ds){
   const e=new Date(s.getTime()+3600000);
   eventStart.value=localInput(s);eventEnd.value=localInput(e);eventModal.classList.add('show')
 }
-function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderMinutes||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';eventModal.classList.add('show')}
+function editEvent(){if(!PERMS.canEdit||!selectedEvent)return;closeModal('detailModal');resetEventForm();eventFormTitle.textContent='Edit Aktiviti';eventId.value=selectedEvent.id;eventTitle.value=selectedEvent.title;eventStart.value=localInput(new Date(selectedEvent.start));eventEnd.value=localInput(new Date(selectedEvent.end));eventLocation.value=selectedEvent.location||'';eventCategory.value=selectedEvent.category||'lain';eventReminder.value=String(selectedEvent.reminderDays||0);eventPic.value=selectedEvent.pic||'';eventAgency.value=selectedEvent.agency||'';eventDescription.value=selectedEvent.description||'';eventModal.classList.add('show')}
 function saveEventUI(btn){
-  const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderMinutes:eventReminder.value,pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
+  const p={id:eventId.value,title:eventTitle.value.trim(),start:eventStart.value,end:eventEnd.value,location:eventLocation.value.trim(),category:eventCategory.value,reminderDays:eventReminder.value,pic:eventPic.value.trim(),agency:eventAgency.value.trim(),description:eventDescription.value.trim()};
   const fn=p.id?'updateCalendarEvent':'createCalendarEvent';
   const unlock=lockBtn(btn,'Menyimpan…');
   gs(fn,[TOKEN,p],r=>{unlock();closeModal('eventModal');toast(r.message);refreshData()},e=>{unlock();showError(e)})
