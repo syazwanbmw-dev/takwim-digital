@@ -1964,6 +1964,86 @@ function installDigestTrigger_() {
          String(clampMinute_(cfg.DIGEST_MINUTE)).padStart(2, '0') + '.';
 }
 
+// Best-effort per sasaran: satu group yang tercicir (bot ditendang, chat_id lapuk)
+// TIDAK boleh menghalang group lain menerima digest. Corak sama gelung penerima
+// dalam sendActivityReminders_.
+// Pulangkan BILANGAN sasaran berjaya -- itu yang membolehkan ujian membuktikan
+// "tiada token -> tiada permintaan luar".
+function sendToTelegram_(text, token, chatIdsCsv) {
+  if (!text || !token) return 0;
+  const ids = parseCsvList_(chatIdsCsv);
+  if (!ids.length) return 0;
+
+  const adminEmail = getConfig_().ADMIN_EMAIL;
+  const url = 'https://api.telegram.org/bot' + token + '/sendMessage';
+  let berjaya = 0;
+
+  ids.forEach(function (id) {
+    try {
+      const res = UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        // SENGAJA tiada parse_mode: teks dihantar mentah, jadi tajuk aktiviti yang
+        // mengandungi _ atau * tak akan memecahkan penghuraian Telegram.
+        payload: JSON.stringify({ chat_id: id, text: text, disable_web_page_preview: true }),
+        muteHttpExceptions: true
+      });
+      const code = res.getResponseCode();
+      let body = {};
+      try { body = JSON.parse(res.getContentText() || '{}') || {}; } catch (e2) { body = {}; }
+
+      // Group yang naik taraf jadi supergroup TUKAR chat_id. Rakam ID baharu supaya
+      // master boleh kemas tetapan -- kalau tidak, digest senyap selama-lamanya.
+      if (body.parameters && body.parameters.migrate_to_chat_id) {
+        addAudit_('DIGEST_CHATID_MIGRATED', id + ' -> ' + body.parameters.migrate_to_chat_id, adminEmail);
+      }
+
+      if (code >= 200 && code <= 299 && body.ok !== false) { berjaya++; return; }
+      // JANGAN sertakan `url` di sini: ia mengandungi token bot.
+      addAudit_('DIGEST_SEND_FAILED',
+                'telegram | ' + id + ' | HTTP ' + code + ' | ' + (body.description || ''), adminEmail);
+    } catch (e) {
+      addAudit_('DIGEST_SEND_FAILED', 'telegram | ' + id + ' | ' + e.message, adminEmail);
+    }
+  });
+  return berjaya;
+}
+
+// URL webhook Chat mengandungi kunci rahsia dalam query string. Dua peraturan:
+// (1) hos DIKUNCI ke chat.googleapis.com -- salah taip tak boleh menghantar takwim
+//     sekolah ke pelayan orang lain (validateSetupInput_ menyemak masa SIMPAN;
+//     semakan kedua di sini sebab trigger boleh jalan atas config lama);
+// (2) hanya bahagian SEBELUM '?' pernah masuk audit.
+function sendToGoogleChat_(text, webhooksCsv) {
+  if (!text) return 0;
+  const urls = parseCsvList_(webhooksCsv);
+  if (!urls.length) return 0;
+
+  const adminEmail = getConfig_().ADMIN_EMAIL;
+  const badan = JSON.stringify({ text: sanitizeForGChat_(text) });
+  let berjaya = 0;
+
+  urls.forEach(function (u) {
+    const label = String(u).split('?')[0];
+    if (!/^https:\/\/chat\.googleapis\.com\/v1\/spaces\/\S+$/.test(u)) {
+      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | hos bukan chat.googleapis.com', adminEmail);
+      return;
+    }
+    try {
+      const res = UrlFetchApp.fetch(u, {
+        method: 'post', contentType: 'application/json',
+        payload: badan, muteHttpExceptions: true
+      });
+      const code = res.getResponseCode();
+      if (code >= 200 && code <= 299) { berjaya++; return; }
+      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | HTTP ' + code, adminEmail);
+    } catch (e) {
+      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | ' + e.message, adminEmail);
+    }
+  });
+  return berjaya;
+}
+
 /* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.

@@ -285,6 +285,125 @@ function sliceBody(src, startMarker, endMarker) {
      eq(dibina, [['onWeekDay', 'SUN'], ['atHour', 23], ['nearMinute', 45], ['create', 'sendWeeklyDigest_']]));
 })();
 
+// --- sink (perlu UrlFetchApp + Properties palsu) ----
+const CFG_UJI = JSON.stringify({
+  APP_NAME: 'Takwim', OFFICE_NAME: 'SK Salor', SHORT_NAME: 'SKS',
+  ADMIN_EMAIL: 'admin@sekolah.edu.my', CALENDAR_ID: 'kal@group.calendar.google.com',
+  TIMEZONE: 'Asia/Kuala_Lumpur', MAX_AUDIT_ROWS: 400
+});
+const TOKEN_UJI = '123456789:AAHdqTcvbXcvbXcvbXcvbXcvbXcvbXcvbXc';
+const HOOK_UJI = 'https://chat.googleapis.com/v1/spaces/AAQZxK/messages?key=KUNCI&token=RAHSIA';
+
+function auditRows(props) {
+  try { return JSON.parse(props.store.PPD_AUDIT_V23 || '[]'); } catch (e) { return []; }
+}
+
+(function ujianSinkTelegram() {
+  // (a) tiada token / tiada chat_id -> TIADA permintaan luar langsung
+  const f1 = fakeUrlFetch();
+  const a1 = loadCode(['sendToTelegram_'], { UrlFetchApp: f1.api,
+    PropertiesService: { getScriptProperties: function () { return fakeProps({ APP_CONFIG_V3: CFG_UJI }).api; } } });
+  const n0 = a1.sendToTelegram_('teks', '', '-100123');
+  const n1 = a1.sendToTelegram_('teks', TOKEN_UJI, '');
+  const n2 = a1.sendToTelegram_('', TOKEN_UJI, '-100123');
+  ok('sendToTelegram_ tiada token/chat_id/teks -> TIADA fetch langsung',
+     f1.calls.length === 0 && n0 === 0 && n1 === 0 && n2 === 0);
+
+  // (b) dua chat_id -> dua POST, teks MENTAH (tiada sanitize, tiada parse_mode)
+  const p2 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f2 = fakeUrlFetch();
+  const a2 = loadCode(['sendToTelegram_'], { UrlFetchApp: f2.api,
+    PropertiesService: { getScriptProperties: function () { return p2.api; } } });
+  const hantar = a2.sendToTelegram_('Tajuk *bintang*', TOKEN_UJI, '-100123, -100456');
+  ok('sendToTelegram_ satu POST per chat_id', f2.calls.length === 2 && hantar === 2);
+  ok('sendToTelegram_ guna endpoint sendMessage bot',
+     f2.calls[0].url === 'https://api.telegram.org/bot' + TOKEN_UJI + '/sendMessage');
+  ok('sendToTelegram_ muteHttpExceptions supaya 4xx tak meletup',
+     f2.calls[0].params.muteHttpExceptions === true);
+  ok('sendToTelegram_ hantar teks MENTAH (tiada parse_mode -> * kekal apa adanya)',
+     JSON.parse(f2.calls[0].params.payload).text === 'Tajuk *bintang*' &&
+     JSON.parse(f2.calls[0].params.payload).parse_mode === undefined);
+  ok('sendToTelegram_ chat_id kedua betul', JSON.parse(f2.calls[1].params.payload).chat_id === '-100456');
+
+  // (c) satu sasaran gagal -> sasaran lain TERUSKAN + audit
+  const p3 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f3 = fakeUrlFetch(function (url, params, n) {
+    return n === 1 ? { code: 403, body: '{"ok":false,"description":"bot was kicked"}' } : {};
+  });
+  const a3 = loadCode(['sendToTelegram_'], { UrlFetchApp: f3.api,
+    PropertiesService: { getScriptProperties: function () { return p3.api; } } });
+  const berjaya = a3.sendToTelegram_('teks', TOKEN_UJI, '-100123, -100456');
+  ok('sendToTelegram_ satu gagal TIDAK menghalang yang lain', f3.calls.length === 2 && berjaya === 1);
+  const rows3 = auditRows(p3);
+  ok('sendToTelegram_ audit kegagalan dengan sink + id + sebab',
+     rows3.length === 1 && rows3[0].action === 'DIGEST_SEND_FAILED' &&
+     rows3[0].detail.indexOf('telegram') !== -1 && rows3[0].detail.indexOf('-100123') !== -1 &&
+     rows3[0].detail.indexOf('bot was kicked') !== -1);
+  ok('AUDIT TIDAK PERNAH memuatkan token (ia ada dalam URL -- mudah tersalah log)',
+     JSON.stringify(rows3).indexOf(TOKEN_UJI) === -1 && JSON.stringify(rows3).indexOf('123456789:') === -1);
+
+  // (d) ok:false dengan kod 200 -- Telegram lapor gagal DALAM badan JSON
+  const p4 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f4 = fakeUrlFetch(function () { return { code: 200, body: '{"ok":false,"description":"chat not found"}' }; });
+  const a4 = loadCode(['sendToTelegram_'], { UrlFetchApp: f4.api,
+    PropertiesService: { getScriptProperties: function () { return p4.api; } } });
+  ok('sendToTelegram_ 200 + ok:false DIKIRA GAGAL (bukan berjaya)',
+     a4.sendToTelegram_('teks', TOKEN_UJI, '-100123') === 0 &&
+     auditRows(p4)[0].detail.indexOf('chat not found') !== -1);
+
+  // (e) group naik taraf jadi supergroup -> chat_id berubah
+  const p5 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f5 = fakeUrlFetch(function () {
+    return { code: 400, body: '{"ok":false,"description":"group upgraded","parameters":{"migrate_to_chat_id":-1009999}}' };
+  });
+  const a5 = loadCode(['sendToTelegram_'], { UrlFetchApp: f5.api,
+    PropertiesService: { getScriptProperties: function () { return p5.api; } } });
+  a5.sendToTelegram_('teks', TOKEN_UJI, '-100123');
+  const aksi5 = auditRows(p5).map(function (r) { return r.action; });
+  ok('sendToTelegram_ audit DIGEST_CHATID_MIGRATED dengan ID baharu',
+     aksi5.indexOf('DIGEST_CHATID_MIGRATED') !== -1 &&
+     JSON.stringify(auditRows(p5)).indexOf('-1009999') !== -1);
+})();
+
+(function ujianSinkGChat() {
+  const p1 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f1 = fakeUrlFetch();
+  const a1 = loadCode(['sendToGoogleChat_'], { UrlFetchApp: f1.api,
+    PropertiesService: { getScriptProperties: function () { return p1.api; } } });
+
+  ok('sendToGoogleChat_ tiada webhook -> TIADA fetch',
+     a1.sendToGoogleChat_('teks', '') === 0 && f1.calls.length === 0);
+
+  const n = a1.sendToGoogleChat_('Tajuk *bintang* <a|b>', HOOK_UJI);
+  ok('sendToGoogleChat_ POST ke URL webhook', n === 1 && f1.calls[0].url === HOOK_UJI);
+  ok('sendToGoogleChat_ hantar JSON {text} yang SUDAH disanitize',
+     JSON.parse(f1.calls[0].params.payload).text === 'Tajuk bintang ab');
+
+  // Hos asing DITOLAK di titik hantar juga (bukan hanya masa simpan)
+  const p2 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f2 = fakeUrlFetch();
+  const a2 = loadCode(['sendToGoogleChat_'], { UrlFetchApp: f2.api,
+    PropertiesService: { getScriptProperties: function () { return p2.api; } } });
+  const n2 = a2.sendToGoogleChat_('teks', 'https://jahat.example.com/hook?key=RAHSIA');
+  ok('sendToGoogleChat_ TOLAK hos bukan chat.googleapis.com (pertahanan berlapis)',
+     n2 === 0 && f2.calls.length === 0);
+  ok('audit hos ditolak TIDAK simpan query string (ia bawa kunci)',
+     JSON.stringify(auditRows(p2)).indexOf('RAHSIA') === -1);
+
+  // Kegagalan HTTP diaudit tanpa membocorkan kunci webhook
+  const p3 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f3 = fakeUrlFetch(function () { return { code: 404, body: 'Not Found' }; });
+  const a3 = loadCode(['sendToGoogleChat_'], { UrlFetchApp: f3.api,
+    PropertiesService: { getScriptProperties: function () { return p3.api; } } });
+  a3.sendToGoogleChat_('teks', HOOK_UJI);
+  const rows3 = auditRows(p3);
+  ok('sendToGoogleChat_ audit kegagalan dengan kod HTTP',
+     rows3[0].action === 'DIGEST_SEND_FAILED' && rows3[0].detail.indexOf('gchat') !== -1 &&
+     rows3[0].detail.indexOf('404') !== -1);
+  ok('AUDIT gchat TIDAK PERNAH memuatkan kunci/token webhook',
+     JSON.stringify(rows3).indexOf('KUNCI') === -1 && JSON.stringify(rows3).indexOf('RAHSIA') === -1);
+})();
+
 // ---- laporan ------------------------------------------------------------
 
 const summary = results.join('\n');
