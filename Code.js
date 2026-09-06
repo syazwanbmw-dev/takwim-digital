@@ -1700,6 +1700,71 @@ function endOfDay_(d) { const x=new Date(d);x.setHours(23,59,59,999);return x; }
 function formatDate_(d,p) { return Utilities.formatDate(d, getConfig_().TIMEZONE, p); }
 
 /* =========================================================
+   DIGEST MINGGUAN -- Broadcast Telegram + Google Chat
+   Dipanggil oleh trigger masa mingguan (lihat syncDigestTrigger_), BUKAN client.
+   Reka bentuk: SATU teks biasa dibina sekali (buildDigestText_) kemudian di-fan-out
+   ke dua sink nipis. Sink-agnostik supaya tambah/buang saluran = kos kecil.
+   Kandungan SENGAJA terhad kepada tajuk/tarikh/lokasi -- audiens ialah ibu bapa &
+   murid di LUAR domain sekolah, jadi PIC/agensi/nota dalaman tak pernah keluar.
+   ========================================================= */
+
+// "-100123, -100456 ; " -> ['-100123','-100456']. SENGAJA tidak lowercase:
+// chat_id boleh jadi @username, dan URL webhook Chat sensitif huruf besar-kecil.
+function parseCsvList_(raw) {
+  return String(raw || '')
+    .split(/[\s,;]+/)
+    .map(function (v) { return v.trim(); })
+    .filter(function (v) { return v.length > 0; });
+}
+
+// Saluran keluar yang DIKENALI. Susunan dalam array ni ialah susunan KANONIK
+// baris `Kongsi:` -- satu aktiviti sentiasa menghasilkan satu bentuk teks yang sama,
+// tak kira susunan guru menanda checkbox.
+const SHARE_CHANNELS = ['tg', 'gchat'];
+
+// Penanda perkongsian disimpan sebagai SATU baris senarai dalam description event
+// (Calendar tiada medan tersuai) -- corak sama Reminder:/RemindTo:.
+// "Kongsi: tg,gchat" -> ['tg','gchat'] ; "Kongsi: gchat" -> ['gchat'] ; tiada -> [].
+// Padanan BERLABUH baris supaya perkataan "kongsi" dalam ayat keterangan guru tak
+// tersalah jadi penanda. Token tak dikenali DIBUANG: senarai ni memandu saluran
+// KELUAR domain sekolah, jadi hanya nama yang kita sendiri tulis boleh menghidupkannya.
+function parseShareChannels_(description) {
+  const m = String(description || '').match(/(?:^|\n)Kongsi:\s*([^\n]*)/i);
+  if (!m) return [];
+  const diminta = {};
+  parseCsvList_(m[1]).forEach(function (t) { diminta[t.toLowerCase()] = true; });
+  return SHARE_CHANNELS.filter(function (c) { return diminta[c] === true; });
+}
+
+// Google Chat menghurai * _ ~ ` sebagai format dan <...|...> sebagai pautan dalam
+// mesej teks biasa. Buang aksara tu supaya tajuk/lokasi guru tak jadi format tak
+// sengaja. Buang (bukan ganti ruang) sebab teks digest bergantung pada indent DUA
+// ruang dan baris baru -- menyentuh ruang putih akan merosakkan susun atur.
+function sanitizeForGChat_(s) {
+  return String(s === null || s === undefined ? '' : s).replace(/[*_~`<>|]/g, '');
+}
+
+// "2026-W37" mengikut ISO-8601. Dipakai sebagai kunci penanda DGSENT_ supaya
+// digest tak dihantar dua kali dalam minggu yang sama.
+// KENAPA ISO, bukan Utilities.formatDate('ww'): peraturan minggu Java bergantung
+// pada locale skrip dan tak stabil merentas sempadan tahun. Nombor minggu dipad
+// 2 digit supaya susunan leksikografi kunci = susunan masa (pruneDigestMarkers_
+// bergantung pada sifat ni).
+// Tiada parameter zon waktu: skrip jalan dalam SATU zon (appsscript.json), dan
+// parameter yang diterima tapi diabaikan ialah jaminan palsu.
+function isoWeekKey_(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // ISO: KHAMIS dalam minggu itu yang menentukan tahun minggu tersebut.
+  const dayNum = (d.getDay() + 6) % 7; // Isnin=0 .. Ahad=6
+  d.setDate(d.getDate() - dayNum + 3);
+  const isoYear = d.getFullYear();
+  const firstThu = new Date(isoYear, 0, 4); // 4 Jan sentiasa dalam minggu ISO ke-1
+  firstThu.setDate(firstThu.getDate() - ((firstThu.getDay() + 6) % 7) + 3);
+  const week = 1 + Math.round((d - firstThu) / 604800000);
+  return isoYear + '-W' + (week < 10 ? '0' + week : String(week));
+}
+
+/* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.
    Untuk ujian had/throttle bersifat stateful, guna checklist manual di @HEAD.
@@ -1815,6 +1880,60 @@ function selfTestReminderHelpers_() {
      DEFAULT_CONFIG.BROADCAST_TG_TOKEN === '' && DEFAULT_CONFIG.BROADCAST_TG_CHAT_IDS === '' &&
      DEFAULT_CONFIG.BROADCAST_GCHAT_WEBHOOKS === '' && DEFAULT_CONFIG.DIGEST_DAY === 0 &&
      DEFAULT_CONFIG.DIGEST_HOUR === 7 && DEFAULT_CONFIG.DIGEST_MINUTE === 45);
+
+  const summary = results.join('\n');
+  Logger.log(summary);
+  const failed = results.filter(function (r) { return r.indexOf('FAIL') === 0; }).length;
+  if (failed) throw new Error(failed + ' ujian GAGAL:\n' + summary);
+  return summary;
+}
+
+function selfTestDigestHelpers_() {
+  const results = [];
+  function ok(name, cond) { results.push((cond ? 'PASS' : 'FAIL') + ' :: ' + name); }
+  function eq(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  ok('parseCsvList_ pisah koma/semikolon/ruang + buang kosong',
+     eq(parseCsvList_('-100a, -100b ; '), ['-100a', '-100b']));
+  ok('parseCsvList_ TIDAK lowercase (chat_id & URL sensitif huruf besar)',
+     eq(parseCsvList_('https://chat.googleapis.com/v1/spaces/AAQZxK/messages?key=K'),
+        ['https://chat.googleapis.com/v1/spaces/AAQZxK/messages?key=K']));
+  ok('parseCsvList_ kosong/null -> []', eq(parseCsvList_(''), []) && eq(parseCsvList_(null), []));
+
+  ok('parseShareChannels_ Kongsi: tg -> [tg]', eq(parseShareChannels_('Kongsi: tg'), ['tg']));
+  ok('parseShareChannels_ Kongsi: gchat -> [gchat]', eq(parseShareChannels_('Kongsi: gchat'), ['gchat']));
+  ok('parseShareChannels_ dua saluran -> [tg,gchat]',
+     eq(parseShareChannels_('PIC: Ali\nKongsi: tg,gchat\n[PPD_CATEGORY:program]'), ['tg', 'gchat']));
+  ok('parseShareChannels_ susunan KANONIK (input gchat,tg tetap keluar tg dahulu)',
+     eq(parseShareChannels_('Kongsi: gchat,tg'), ['tg', 'gchat']));
+  ok('parseShareChannels_ tiada baris / senarai kosong -> []',
+     eq(parseShareChannels_('PIC: Ali'), []) && eq(parseShareChannels_(''), []) &&
+     eq(parseShareChannels_('Kongsi:   '), []));
+  ok('parseShareChannels_ buang token TAK DIKENALI (tiada saluran hantu)',
+     eq(parseShareChannels_('Kongsi: xyz'), []) && eq(parseShareChannels_('Kongsi: 1'), []) &&
+     eq(parseShareChannels_('Kongsi: tg,whatsapp'), ['tg']));
+  ok('parseShareChannels_ BERLABUH baris (bukan tengah ayat keterangan guru)',
+     eq(parseShareChannels_('Kita akan Kongsi: tg dgn PIBG nanti'), []));
+  ok('parseShareChannels_ huruf besar diterima', eq(parseShareChannels_('Kongsi: TG, GChat'), ['tg', 'gchat']));
+
+  ok('sanitizeForGChat_ buang aksara format Chat',
+     sanitizeForGChat_('*tebal* _condong_ ~garis~ `kod` <a|b>') === 'tebal condong garis kod ab');
+  ok('sanitizeForGChat_ KEKALKAN baris baru + indent (susun atur digest bergantung padanya)',
+     sanitizeForGChat_('a\n  b') === 'a\n  b');
+  ok('sanitizeForGChat_ null -> kosong', sanitizeForGChat_(null) === '');
+
+  ok('isoWeekKey_ 1 Jan 2026 (Khamis) -> 2026-W01', isoWeekKey_(new Date(2026, 0, 1)) === '2026-W01');
+  ok('isoWeekKey_ 31 Dis 2026 -> 2026-W53 (tahun ada W53)', isoWeekKey_(new Date(2026, 11, 31)) === '2026-W53');
+  ok('isoWeekKey_ 1 Jan 2027 masih 2026-W53 (sempadan tahun stabil)',
+     isoWeekKey_(new Date(2027, 0, 1)) === '2026-W53');
+  ok('isoWeekKey_ 29 Dis 2025 sudah 2026-W01 (minggu ISO milik tahun HADAPAN)',
+     isoWeekKey_(new Date(2025, 11, 29)) === '2026-W01');
+  ok('isoWeekKey_ 1 Jan 2023 (Ahad) -> 2022-W52 (minggu ISO milik tahun LEPAS)',
+     isoWeekKey_(new Date(2023, 0, 1)) === '2022-W52');
+  ok('isoWeekKey_ minggu <10 dipad 2 digit (susunan leksikografi = susunan masa)',
+     isoWeekKey_(new Date(2026, 8, 6)) === '2026-W36' && isoWeekKey_(new Date(2026, 1, 2)) === '2026-W06');
+  ok('isoWeekKey_ hari BERBEZA dalam minggu sama -> kunci sama',
+     isoWeekKey_(new Date(2026, 8, 14)) === isoWeekKey_(new Date(2026, 8, 20)));
 
   const summary = results.join('\n');
   Logger.log(summary);

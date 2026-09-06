@@ -148,6 +148,7 @@ function runSuite(fnName) {
 
 runSuite('selfTestRegHelpers_');
 runSuite('selfTestReminderHelpers_');
+runSuite('selfTestDigestHelpers_');
 
 // ---- ujian orkestrasi (perlu objek palsu -- tak boleh hidup dalam Code.js) ----
 // (diisi bermula Task 10)
