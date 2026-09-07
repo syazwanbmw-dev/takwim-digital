@@ -2007,17 +2007,24 @@ function sendToTelegram_(text, token, chatIdsCsv) {
       // Group yang naik taraf jadi supergroup TUKAR chat_id. Rakam ID baharu supaya
       // master boleh kemas tetapan -- kalau tidak, digest senyap selama-lamanya.
       if (body.parameters && body.parameters.migrate_to_chat_id) {
-        addAudit_('DIGEST_CHATID_MIGRATED', id + ' -> ' + body.parameters.migrate_to_chat_id, adminEmail);
+        // addAudit_ sendiri boleh gagal (LockService tamat masa, Properties terganggu).
+        // Kalau dibiar meletup, forEach TERHENTI dan chat_id SELEPAS ini (belum
+        // dicuba langsung) senyap terlepas -- pagar bisu supaya sasaran lain diteruskan.
+        try { addAudit_('DIGEST_CHATID_MIGRATED', id + ' -> ' + body.parameters.migrate_to_chat_id, adminEmail); } catch (e2) { /* sengaja senyap */ }
       }
 
       if (code >= 200 && code <= 299 && body.ok !== false) { berjaya++; return; }
       // JANGAN sertakan `url` di sini: ia mengandungi token bot.
-      addAudit_('DIGEST_SEND_FAILED',
-                'telegram | ' + id + ' | HTTP ' + code + ' | ' + (body.description || ''), adminEmail);
+      // addAudit_ boleh gagal -- pagar bisu, sebab sama macam di atas.
+      try {
+        addAudit_('DIGEST_SEND_FAILED',
+                  'telegram | ' + id + ' | HTTP ' + code + ' | ' + (body.description || ''), adminEmail);
+      } catch (e2) { /* sengaja senyap */ }
     } catch (e) {
       // JANGAN sertakan e.message di sini: pada kegagalan tahap rangkaian (DNS, timeout,
       // SSL), e.message boleh mengandungi URL endpoint lengkap (bersama token bot rahsia).
-      addAudit_('DIGEST_SEND_FAILED', 'telegram | ' + id + ' | ralat rangkaian', adminEmail);
+      // addAudit_ boleh gagal -- pagar bisu, sebab sama macam di atas.
+      try { addAudit_('DIGEST_SEND_FAILED', 'telegram | ' + id + ' | ralat rangkaian', adminEmail); } catch (e2) { /* sengaja senyap */ }
     }
   });
   return berjaya;
@@ -2040,7 +2047,10 @@ function sendToGoogleChat_(text, webhooksCsv) {
   urls.forEach(function (u) {
     const label = String(u).split('?')[0];
     if (!GCHAT_WEBHOOK_HOST_RE.test(u)) {
-      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | hos bukan chat.googleapis.com', adminEmail);
+      // addAudit_ sendiri boleh gagal (LockService tamat masa, Properties terganggu).
+      // Kalau dibiar meletup, forEach TERHENTI dan webhook SELEPAS ini (belum
+      // dicuba langsung) senyap terlepas -- pagar bisu supaya sasaran lain diteruskan.
+      try { addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | hos bukan chat.googleapis.com', adminEmail); } catch (e2) { /* sengaja senyap */ }
       return;
     }
     try {
@@ -2050,11 +2060,13 @@ function sendToGoogleChat_(text, webhooksCsv) {
       });
       const code = res.getResponseCode();
       if (code >= 200 && code <= 299) { berjaya++; return; }
-      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | HTTP ' + code, adminEmail);
+      // addAudit_ boleh gagal -- pagar bisu, sebab sama macam di atas.
+      try { addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | HTTP ' + code, adminEmail); } catch (e2) { /* sengaja senyap */ }
     } catch (e) {
       // JANGAN sertakan e.message di sini: pada kegagalan tahap rangkaian (DNS, timeout,
       // SSL), e.message boleh mengandungi URL webhook lengkap (bersama key/token rahsia).
-      addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | ralat rangkaian', adminEmail);
+      // addAudit_ boleh gagal -- pagar bisu, sebab sama macam di atas.
+      try { addAudit_('DIGEST_SEND_FAILED', 'gchat | ' + label + ' | ralat rangkaian', adminEmail); } catch (e2) { /* sengaja senyap */ }
     }
   });
   return berjaya;
@@ -2066,17 +2078,31 @@ function sendToGoogleChat_(text, webhooksCsv) {
 // untuk memberi kebenaran "sambung ke perkhidmatan luar" (UrlFetchApp). Tanpa itu,
 // eksekusi trigger gagal SENYAP.
 function sendWeeklyDigest_() {
-  // adminEmail diselesaikan SEKALI di sini (bukan dalam catch) supaya catch di bawah
-  // TIDAK perlu panggil getConfig_() lagi. getConfig_() baca PropertiesService --
-  // kalau PUNCA kegagalan asal ialah PropertiesService sendiri (kuota/servis terganggu),
-  // panggilan kedua akan gagal juga dan pengecualian KEDUA itu (dinilai sebagai hujah
-  // kepada addAudit_ SEBELUM addAudit_ sempat jalan) lepaskan terus keluar dari fungsi
-  // ini -- melanggar syarat "trigger handler tak boleh sekali-kali throw keluar".
-  // Kalau getConfig_() gagal pada percubaan PERTAMA (baris seterusnya), adminEmail
-  // kekal undefined dan addAudit_ tetap selamat (normalizeEmail_ terima undefined).
-  let adminEmail;
+  // GAS ada quirk jarang (tapi didokumentasikan) di mana SATU trigger masa boleh
+  // tercetus DUA kali serentak. Tanpa kunci, dua larian sama-sama boleh lepasi
+  // semakan penanda DGSENT_ di bawah SEBELUM mana-mana sempat menulisnya -- hasilnya
+  // digest dihantar dua kali. Kunci di sini TIDAK mengubah BILA penanda ditulis (ia
+  // kekal selepas cuba hantar, spec 6 / mutasi M3 Task 11) -- ia cuma pastikan cuma
+  // SATU larian sampai ke logik tu pada satu-satu masa.
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    // Larian lain sedang pegang kunci ni -- ia sama ada tengah jalan atau baru siap.
+    // Tiada apa produktif untuk larian ni buat; keluar SENYAP (jangan throw -- trigger
+    // ni jalan tanpa sesi, tiada siapa nampak ralat pun kalau ia meletup).
+    return;
+  }
   try {
-    const cfg = getConfig_();
+    // adminEmail diselesaikan SEKALI di sini (bukan dalam catch) supaya catch di bawah
+    // TIDAK perlu panggil getConfig_() lagi. getConfig_() baca PropertiesService --
+    // kalau PUNCA kegagalan asal ialah PropertiesService sendiri (kuota/servis terganggu),
+    // panggilan kedua akan gagal juga dan pengecualian KEDUA itu (dinilai sebagai hujah
+    // kepada addAudit_ SEBELUM addAudit_ sempat jalan) lepaskan terus keluar dari fungsi
+    // ini -- melanggar syarat "trigger handler tak boleh sekali-kali throw keluar".
+    // Kalau getConfig_() gagal pada percubaan PERTAMA (baris seterusnya), adminEmail
+    // kekal undefined dan addAudit_ tetap selamat (normalizeEmail_ terima undefined).
+    let adminEmail;
+    try {
+      const cfg = getConfig_();
     adminEmail = cfg.ADMIN_EMAIL;
     // Telegram perlu token DAN sekurang-kurangnya satu chat_id; Chat perlu webhook.
     // Kalau tiada saluran langsung yang lengkap -- tak ada apa nak buat.
@@ -2133,6 +2159,9 @@ function sendWeeklyDigest_() {
     // pengecualian kedua lepas keluar, tiada siapa nampak pun. Audit yang hilang
     // lebih murah daripada trigger yang meletup.
     try { addAudit_('DIGEST_RUN_FAILED', e.message, adminEmail); } catch (e2) { /* sengaja senyap */ }
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 

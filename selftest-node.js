@@ -98,7 +98,9 @@ function defaultFakes() {
     },
     MailApp: { sendEmail: function () {} },
     Session: { getEffectiveUser: function () { return { getEmail: function () { return 'admin@x.com'; } }; } },
-    LockService: { getScriptLock: function () { return { waitLock: function () {}, releaseLock: function () {} }; } },
+    // tryLock lalai BERJAYA supaya ujian yang tak menguji kunci (majoriti) tak perlu
+    // tahu langsung pasal LockService -- ujian kunci-dipegang override ini sendiri.
+    LockService: { getScriptLock: function () { return { tryLock: function () { return true; }, waitLock: function () {}, releaseLock: function () {} }; } },
     Logger: { log: function () {} },
     // Lalai SENGAJA meletup: mana-mana ujian yang tak sepatutnya buat permintaan luar
     // akan gagal dengan kuat, bukan senyap.
@@ -370,6 +372,21 @@ function auditRows(props) {
   try { return JSON.parse(props.store.PPD_AUDIT_V23 || '[]'); } catch (e) { return []; }
 }
 
+// addAudit_ sendiri pegang LockService.getScriptLock().waitLock(). LockService palsu
+// ni buat waitLock GAGAL pada panggilan PERTAMA sahaja (macam LockService.waitLock
+// tamat masa atas satu addAudit_ tunggal), lepas tu pulih -- supaya kita boleh
+// buktikan sasaran PERTAMA punya addAudit_ meletup tanpa membutakan sasaran lain.
+function fakeLockGagalSekali() {
+  let n = 0;
+  return { getScriptLock: function () {
+    return {
+      tryLock: function () { return true; },
+      waitLock: function () { n++; if (n === 1) throw new Error('LockService: waitLock tamat masa'); },
+      releaseLock: function () {}
+    };
+  } };
+}
+
 (function ujianSinkTelegram() {
   // (a) tiada token / tiada chat_id -> TIADA permintaan luar langsung
   const f1 = fakeUrlFetch();
@@ -451,6 +468,24 @@ function auditRows(props) {
   ok('AUDIT kegagalan rangkaian TIDAK bocorkan token (tiada ' + TOKEN_UJI + ' dalam audit)',
      JSON.stringify(rows6).indexOf(TOKEN_UJI) === -1 && JSON.stringify(rows6).indexOf('123456789:') === -1 &&
      JSON.stringify(rows6).indexOf('getaddrinfo') === -1);
+
+  // (g) addAudit_ SENDIRI meletup pada sasaran PERTAMA -- sasaran KEDUA mesti tetap
+  // dicuba. Ini yang bezakan gerbang ni drpd ujian (c) di atas: (c) buktikan fetch yang
+  // gagal tak henti gelung; ujian ni buktikan addAudit_ yang gagal pun tak henti gelung.
+  const p7 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f7 = fakeUrlFetch(function (url, params, n) {
+    return n === 1 ? { code: 403, body: '{"ok":false,"description":"bot was kicked"}' } : {};
+  });
+  const a7 = loadCode(['sendToTelegram_'], { UrlFetchApp: f7.api,
+    LockService: fakeLockGagalSekali(),
+    PropertiesService: { getScriptProperties: function () { return p7.api; } } });
+  let meletup7 = false;
+  let berjaya7;
+  try { berjaya7 = a7.sendToTelegram_('teks', TOKEN_UJI, '-100123, -100456'); } catch (e) { meletup7 = true; }
+  ok('sendToTelegram_ addAudit_ gagal pada sasaran pertama -> TIDAK throw keluar dari sink',
+     !meletup7);
+  ok('sendToTelegram_ addAudit_ gagal pada sasaran pertama -> sasaran KEDUA tetap dicuba',
+     f7.calls.length === 2 && berjaya7 === 1);
 })();
 
 (function ujianSinkGChat() {
@@ -506,6 +541,24 @@ function auditRows(props) {
   ok('AUDIT kegagalan rangkaian TIDAK bocorkan kunci (tiada KUNCI/RAHSIA dalam audit)',
      JSON.stringify(rows4).indexOf('KUNCI') === -1 && JSON.stringify(rows4).indexOf('RAHSIA') === -1 &&
      JSON.stringify(rows4).indexOf('CERTIFICATE_VERIFY_FAILED') === -1);
+
+  // (e) addAudit_ SENDIRI meletup pada sasaran PERTAMA -- sasaran KEDUA mesti tetap
+  // dicuba. Ini yang bezakan gerbang ni drpd ujian di atas: ujian di atas buktikan fetch
+  // yang gagal tak henti gelung; ujian ni buktikan addAudit_ yang gagal pun tak henti gelung.
+  const p5 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  const f5 = fakeUrlFetch(function (url, params, n) {
+    return n === 1 ? { error: 'rangkaian putus' } : {};
+  });
+  const a5 = loadCode(['sendToGoogleChat_'], { UrlFetchApp: f5.api,
+    LockService: fakeLockGagalSekali(),
+    PropertiesService: { getScriptProperties: function () { return p5.api; } } });
+  let meletup5 = false;
+  let berjaya5;
+  try { berjaya5 = a5.sendToGoogleChat_('teks', HOOK_UJI + ', ' + HOOK_UJI); } catch (e) { meletup5 = true; }
+  ok('sendToGoogleChat_ addAudit_ gagal pada sasaran pertama -> TIDAK throw keluar dari sink',
+     !meletup5);
+  ok('sendToGoogleChat_ addAudit_ gagal pada sasaran pertama -> sasaran KEDUA tetap dicuba',
+     f5.calls.length === 2 && berjaya5 === 1);
 })();
 
 // --- orkestrasi sendWeeklyDigest_ -------------------------------------------
@@ -723,6 +776,38 @@ function kunciMingguIni(api) {
   try { api.sendWeeklyDigest_(); } catch (e) { meletup = true; }
   ok('kegagalan PropertiesService BERTERUSAN (audit pun gagal) TIDAK melempar keluar dari handler trigger',
      !meletup);
+})();
+
+(function ujianDigestKunciSerentak() {
+  // Simulasi larian KEDUA yang tercetus semasa larian PERTAMA masih pegang kunci
+  // (quirk trigger masa GAS berganda -- jarang, tapi didokumentasikan). Config +
+  // kalendar di bawah SENGAJA dibina supaya larian AKAN menghantar kalau kunci
+  // tak menyekat -- itulah cara ujian ni membezakan "disekat kunci" drpd
+  // "tiada apa nak dihantar" (dua sebab lain yang juga hasilkan 0 fetch).
+  const cfg = Object.assign(JSON.parse(CFG_UJI), {
+    BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: ''
+  });
+  const props = fakeProps({ APP_CONFIG_V3: JSON.stringify(cfg) });
+  const f = fakeUrlFetch();
+  const esok = function (n, jam) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); d.setHours(jam || 9); return d; };
+  const events = [fakeEvent({ id: 'k1', title: 'Aktiviti Kunci', description: 'Kongsi: tg\n[PPD_CATEGORY:program]',
+    location: 'Padang', start: esok(1), end: esok(1, 10), allDay: false })];
+  const lockDipegangLain = { getScriptLock: function () {
+    return { tryLock: function () { return false; }, releaseLock: function () {} };
+  } };
+  const api = loadCode(['sendWeeklyDigest_'], {
+    UrlFetchApp: f.api,
+    LockService: lockDipegangLain,
+    PropertiesService: { getScriptProperties: function () { return props.api; } },
+    CalendarApp: {
+      EventColor: { BLUE: 'B', GREEN: 'G', ORANGE: 'O', MAUVE: 'M', RED: 'R', GRAY: 'GY', YELLOW: 'Y' },
+      getCalendarById: function () { return fakeCalendar(events); }
+    }
+  });
+  let meletup = false;
+  try { api.sendWeeklyDigest_(); } catch (e) { meletup = true; }
+  ok('sendWeeklyDigest_ kunci sudah dipegang larian lain -> TIADA fetch dan TIDAK throw',
+     !meletup && f.calls.length === 0);
 })();
 
 (function ujianPruneDigestMarkers() {
