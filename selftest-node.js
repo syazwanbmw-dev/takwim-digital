@@ -438,6 +438,168 @@ function auditRows(props) {
      JSON.stringify(rows4).indexOf('CERTIFICATE_VERIFY_FAILED') === -1);
 })();
 
+// --- orkestrasi sendWeeklyDigest_ -------------------------------------------
+// Membina "dunia" lengkap: config, kalendar, Properties, UrlFetchApp -- semua palsu.
+function duniaDigest(opsi) {
+  opsi = opsi || {};
+  const cfg = Object.assign(JSON.parse(CFG_UJI), opsi.cfg || {
+    BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123',
+    BROADCAST_GCHAT_WEBHOOKS: HOOK_UJI
+  });
+  const props = fakeProps(Object.assign({ APP_CONFIG_V3: JSON.stringify(cfg) }, opsi.props || {}));
+  const fetch = fakeUrlFetch(opsi.responder);
+  const esok = function (n, jam) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + n); d.setHours(jam || 9); return d; };
+  // Empat kombinasi saluran -- setiap satu mesti berakhir di tempat yang BETUL sahaja.
+  const events = (opsi.events || [
+    { id: 'e1', title: 'Hari Sukan TG', description: 'PIC: Ali\nKongsi: tg\n[PPD_CATEGORY:program]',
+      location: 'Padang', start: esok(2), end: esok(2, 13), allDay: false },
+    { id: 'e2', title: 'Kuiz Sains CHAT', description: 'Kongsi: gchat\n[PPD_CATEGORY:program]',
+      location: 'Makmal', start: esok(3), end: esok(3, 11), allDay: false },
+    { id: 'e3', title: 'Perhimpunan DUA', description: 'Kongsi: tg,gchat\n[PPD_CATEGORY:program]',
+      location: 'Dewan', start: esok(4), end: esok(4, 10), allDay: false },
+    { id: 'e4', title: 'Mesyuarat Panitia SULIT', description: 'PIC: Siti\n[PPD_CATEGORY:mesyuarat]',
+      location: 'Bilik Guru', start: esok(5), end: esok(5, 11), allDay: false }
+  ]).map(fakeEvent);
+  const api = loadCode(['sendWeeklyDigest_', 'pruneDigestMarkers_', 'isoWeekKey_'], {
+    UrlFetchApp: fetch.api,
+    PropertiesService: { getScriptProperties: function () { return props.api; } },
+    CalendarApp: {
+      EventColor: { BLUE: 'B', GREEN: 'G', ORANGE: 'O', MAUVE: 'M', RED: 'R', GRAY: 'GY', YELLOW: 'Y' },
+      getCalendarById: function () { return fakeCalendar(events); }
+    }
+  });
+  return { api: api, props: props, fetch: fetch };
+}
+function kunciMingguIni(api) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  return 'DGSENT_' + api.isoWeekKey_(t);
+}
+
+(function ujianDigestAliranPenuh() {
+  const d = duniaDigest();
+  d.api.sendWeeklyDigest_();
+  ok('sendWeeklyDigest_ hantar ke KEDUA-DUA sink', d.fetch.calls.length === 2);
+
+  const panggilTg = d.fetch.calls.filter(function (c) { return c.url.indexOf('api.telegram.org') !== -1; })[0];
+  const panggilGc = d.fetch.calls.filter(function (c) { return c.url.indexOf('chat.googleapis.com') !== -1; })[0];
+  const teksTg = JSON.parse(panggilTg.params.payload).text;
+  const teksGc = JSON.parse(panggilGc.params.payload).text;
+
+  ok('digest Telegram = aktiviti tg + dua-saluran SAHAJA',
+     teksTg.indexOf('Hari Sukan TG') !== -1 && teksTg.indexOf('Perhimpunan DUA') !== -1 &&
+     teksTg.indexOf('Kuiz Sains CHAT') === -1);
+  ok('digest Google Chat = aktiviti gchat + dua-saluran SAHAJA',
+     teksGc.indexOf('Kuiz Sains CHAT') !== -1 && teksGc.indexOf('Perhimpunan DUA') !== -1 &&
+     teksGc.indexOf('Hari Sukan TG') === -1);
+  ok('aktiviti TIADA saluran tak masuk mana-mana digest',
+     teksTg.indexOf('Mesyuarat Panitia SULIT') === -1 && teksGc.indexOf('Mesyuarat Panitia SULIT') === -1);
+  ok('digest TIDAK bocorkan PIC walau untuk aktiviti bertanda',
+     teksTg.indexOf('Ali') === -1 && teksGc.indexOf('Ali') === -1);
+  ok('penanda minggu diset selepas hantar', d.props.store[kunciMingguIni(d.api)] !== undefined);
+})();
+
+(function ujianDigestSatuSaluranSahaja() {
+  // Kedua-dua sink DIKONFIG penuh, tetapi minggu ni hanya ada aktiviti bertanda 'tg'.
+  // Space murid TIDAK boleh menerima mesej kosong atau mesej yang bukan untuk mereka.
+  const hariIni = function (n) { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n); x.setHours(9); return x; };
+  const d = duniaDigest({ events: [
+    { id: 'x1', title: 'Hanya Telegram', description: 'Kongsi: tg\n[PPD_CATEGORY:program]',
+      location: 'Padang', start: hariIni(1), end: hariIni(1), allDay: false }
+  ] });
+  d.api.sendWeeklyDigest_();
+  ok('tiada aktiviti gchat -> sink Chat TIDAK dipanggil langsung',
+     d.fetch.calls.length === 1 && d.fetch.calls[0].url.indexOf('api.telegram.org') !== -1);
+  ok('penanda TETAP diset walau hanya satu saluran dihantar',
+     d.props.store[kunciMingguIni(d.api)] !== undefined);
+
+  const d2 = duniaDigest({ events: [
+    { id: 'x2', title: 'Hanya Chat', description: 'Kongsi: gchat\n[PPD_CATEGORY:program]',
+      location: 'Makmal', start: hariIni(1), end: hariIni(1), allDay: false }
+  ] });
+  d2.api.sendWeeklyDigest_();
+  ok('tiada aktiviti tg -> sink Telegram TIDAK dipanggil langsung',
+     d2.fetch.calls.length === 1 && d2.fetch.calls[0].url.indexOf('chat.googleapis.com') !== -1);
+})();
+
+(function ujianDigestGuardKonfigurasi() {
+  const d = duniaDigest({ cfg: { BROADCAST_TG_TOKEN: '', BROADCAST_TG_CHAT_IDS: '', BROADCAST_GCHAT_WEBHOOKS: '' } });
+  d.api.sendWeeklyDigest_();
+  ok('tiada konfigurasi -> TIADA fetch, TIADA penanda',
+     d.fetch.calls.length === 0 && d.props.store[kunciMingguIni(d.api)] === undefined);
+
+  // Token ada tapi chat_id kosong: Telegram BELUM sedia, tetapi Chat sedia.
+  const d2 = duniaDigest({ cfg: { BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '', BROADCAST_GCHAT_WEBHOOKS: HOOK_UJI } });
+  d2.api.sendWeeklyDigest_();
+  ok('Telegram separuh dikonfig -> Chat SAHAJA tetap dihantar',
+     d2.fetch.calls.length === 1 && d2.fetch.calls[0].url === HOOK_UJI);
+
+  const d3 = duniaDigest({ cfg: { BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: '' } });
+  d3.api.sendWeeklyDigest_();
+  ok('Chat tak dikonfig -> Telegram SAHAJA tetap dihantar',
+     d3.fetch.calls.length === 1 && d3.fetch.calls[0].url.indexOf('api.telegram.org') !== -1);
+})();
+
+(function ujianDigestMingguKosong() {
+  const d = duniaDigest({ events: [
+    { id: 'e9', title: 'Mesyuarat', description: '[PPD_CATEGORY:mesyuarat]',
+      location: '', start: new Date(), end: new Date(), allDay: false }
+  ] });
+  d.api.sendWeeklyDigest_();
+  ok('KEDUA-DUA senarai saluran kosong -> skip SENYAP dan TIDAK set penanda',
+     d.fetch.calls.length === 0 && d.props.store[kunciMingguIni(d.api)] === undefined);
+})();
+
+(function ujianDigestSekaliSeminggu() {
+  const d = duniaDigest();
+  d.api.sendWeeklyDigest_();
+  const bil = d.fetch.calls.length;
+  d.api.sendWeeklyDigest_();
+  ok('larian kedua dalam minggu SAMA tidak menghantar apa-apa lagi', d.fetch.calls.length === bil);
+})();
+
+(function ujianDigestUrutanPenanda() {
+  // Penanda mesti diset SELEPAS cuba hantar. Kalau ia diset dahulu, kegagalan
+  // sementara (rangkaian) akan mengunci minggu itu tanpa sebarang mesej terhantar.
+  let penandaMasaHantar = 'BELUM DISEMAK';
+  const d = duniaDigest({ responder: function () { return {}; } });
+  const kunci = kunciMingguIni(d.api);
+  const fetchAsal = d.fetch.api.fetch;
+  d.fetch.api.fetch = function (url, params) {
+    penandaMasaHantar = d.props.store[kunci];
+    return fetchAsal(url, params);
+  };
+  d.api.sendWeeklyDigest_();
+  ok('penanda DGSENT_ belum wujud pada masa fetch pertama (set SELEPAS hantar)',
+     penandaMasaHantar === undefined);
+})();
+
+(function ujianDigestKegagalanTidakMeletup() {
+  const d = duniaDigest({ responder: function () { throw new Error('rangkaian putus'); } });
+  let meletup = false;
+  try { d.api.sendWeeklyDigest_(); } catch (e) { meletup = true; }
+  ok('kegagalan rangkaian TIDAK melempar keluar dari handler trigger', !meletup);
+  ok('kegagalan rangkaian tetap diaudit',
+     JSON.stringify(auditRows(d.props)).indexOf('DIGEST_SEND_FAILED') !== -1);
+  ok('penanda TETAP diset selepas cuba (snapshot mingguan, bukan baris gilir cuba semula)',
+     d.props.store[kunciMingguIni(d.api)] !== undefined);
+})();
+
+(function ujianPruneDigestMarkers() {
+  const seed = { APP_CONFIG_V3: CFG_UJI, PPD_USERS_V23: '{}' };
+  for (let i = 1; i <= 9; i++) seed['DGSENT_2026-W' + (i < 10 ? '0' + i : i)] = '1';
+  seed['DGSENT_2025-W52'] = '1';
+  const props = fakeProps(seed);
+  const api = loadCode(['pruneDigestMarkers_'], {
+    PropertiesService: { getScriptProperties: function () { return props.api; } } });
+  api.pruneDigestMarkers_();
+  const tinggal = Object.keys(props.store).filter(function (k) { return k.indexOf('DGSENT_') === 0; }).sort();
+  ok('pruneDigestMarkers_ kekalkan 8 penanda TERBAHARU sahaja', tinggal.length === 8);
+  ok('pruneDigestMarkers_ buang yang PALING LAMA (merentas sempadan tahun)',
+     tinggal.indexOf('DGSENT_2025-W52') === -1 && tinggal.indexOf('DGSENT_2026-W01') === -1 &&
+     tinggal.indexOf('DGSENT_2026-W09') !== -1);
+  ok('pruneDigestMarkers_ TIDAK sentuh kunci lain', props.store.APP_CONFIG_V3 !== undefined);
+})();
+
 // ---- laporan ------------------------------------------------------------
 
 const summary = results.join('\n');

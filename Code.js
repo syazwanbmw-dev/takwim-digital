@@ -2052,6 +2052,73 @@ function sendToGoogleChat_(text, webhooksCsv) {
   return berjaya;
 }
 
+// Handler trigger mingguan. Dipanggil oleh trigger masa (syncDigestTrigger_), BUKAN
+// client -- tiada token sesi di sini, jadi tiada requireSession_.
+// Prasyarat sekali sahaja: master mesti Run fungsi ni SEKALI dari Apps Script Editor
+// untuk memberi kebenaran "sambung ke perkhidmatan luar" (UrlFetchApp). Tanpa itu,
+// eksekusi trigger gagal SENYAP.
+function sendWeeklyDigest_() {
+  try {
+    const cfg = getConfig_();
+    // Telegram perlu token DAN sekurang-kurangnya satu chat_id; Chat perlu webhook.
+    // Kalau tiada saluran langsung yang lengkap -- tak ada apa nak buat.
+    const tgSedia = !!(cfg.BROADCAST_TG_TOKEN && cfg.BROADCAST_TG_CHAT_IDS);
+    const gcSedia = !!cfg.BROADCAST_GCHAT_WEBHOOKS;
+    if (!tgSedia && !gcSedia) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const rangeEnd = new Date(today);
+    rangeEnd.setDate(rangeEnd.getDate() + 7);
+
+    // Kalendar KERJA sahaja. Cuti Google (getHolidayEvents_) sengaja tidak digabung:
+    // ia kalendar luar yang tak boleh ditanda "Kongsi", dan ibu bapa sudah tahu cuti am.
+    const events = safeGetEvents_(getPPDCalendar_(), today, rangeEnd).map(eventToObject_);
+
+    // Setiap sink tapis senarainya SENDIRI: guru boleh tanda satu saluran sahaja,
+    // jadi kandungan dua digest ini memang boleh berbeza.
+    const tgEvents = events.filter(function (e) { return e.shareChannels.indexOf('tg') !== -1; });
+    const gchatEvents = events.filter(function (e) { return e.shareChannels.indexOf('gchat') !== -1; });
+
+    // Minggu tanpa sebarang aktiviti bertanda: skip SENYAP dan JANGAN set penanda,
+    // supaya aktiviti yang ditanda lewat pada minggu yang sama masih boleh keluar.
+    if (!tgEvents.length && !gchatEvents.length) return;
+
+    const props = PropertiesService.getScriptProperties();
+    const kunci = 'DGSENT_' + isoWeekKey_(today);
+    if (props.getProperty(kunci)) return;
+
+    // Senarai kosong TIDAK dihantar: sink yang tiada aktiviti minggu ni tak patut
+    // menerima mesej "kosong" yang hanya ada tajuk dan nota kaki.
+    if (tgSedia && tgEvents.length) {
+      sendToTelegram_(buildDigestText_(tgEvents, cfg), cfg.BROADCAST_TG_TOKEN, cfg.BROADCAST_TG_CHAT_IDS);
+    }
+    if (gcSedia && gchatEvents.length) {
+      sendToGoogleChat_(buildDigestText_(gchatEvents, cfg), cfg.BROADCAST_GCHAT_WEBHOOKS);
+    }
+
+    // Penanda diset SELEPAS cuba semua sink, tanpa mengira kegagalan separa: digest
+    // ialah SNAPSHOT mingguan. Cuba semula berisiko menghantar dua kali ke sink yang
+    // sudah berjaya; minggu tertinggal boleh diterima (keputusan master, spec 6).
+    props.setProperty(kunci, String(Date.now()));
+    pruneDigestMarkers_();
+  } catch (e) {
+    addAudit_('DIGEST_RUN_FAILED', e.message, getConfig_().ADMIN_EMAIL);
+  }
+}
+
+// Script Properties ialah ruang terhad dan dikongsi seluruh sistem. Penanda minggu
+// hanya perlu cukup lama untuk menghalang penghantaran berganda -- 8 minggu memberi
+// jidar besar. Kunci diisih leksikografi: aman kerana isoWeekKey_ memad nombor
+// minggu kepada 2 digit ("2026-W06" < "2026-W10").
+function pruneDigestMarkers_() {
+  const props = PropertiesService.getScriptProperties();
+  const kunci = props.getKeys().filter(function (k) { return k.indexOf('DGSENT_') === 0; });
+  if (kunci.length <= 8) return;
+  kunci.sort();
+  kunci.slice(0, kunci.length - 8).forEach(function (k) { props.deleteProperty(k); });
+}
+
 /* =========================================================
    SELF-TEST (pilihan) -- jalankan dari editor Apps Script.
    Fungsi tulen sahaja, TIDAK sentuh PropertiesService / data sebenar.
