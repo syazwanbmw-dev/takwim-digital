@@ -135,6 +135,21 @@ Kita akan perlukan **Calendar ID** kalendar ini nanti (Langkah 7).
 
 ---
 
+## Kongsi aktiviti dengan ibu bapa & murid (pilihan)
+
+Dalam borang **Tambah / Edit Aktiviti** ada dua checkbox: **"Kongsi ke Telegram"**
+dan **"Kongsi ke Google Chat"**. Bila ditanda, aktiviti itu akan masuk dalam
+senarai ringkas yang dihantar sekali seminggu ke saluran berkenaan.
+
+- Boleh pilih **satu sahaja**, kedua-dua, atau tiada langsung.
+- Lalai **tidak** bertanda — aktiviti dalaman kekal dalaman.
+- Hanya **tajuk, tarikh dan lokasi** dihantar keluar. PIC, agensi dan keterangan
+  tidak pernah dikongsi.
+- Digest hanya keluar kalau Super Admin sudah menyiapkan tetapan Telegram/Chat
+  (Langkah 8 dalam panduan pemasangan).
+
+---
+
 ## Langkah 9 — Jemput guru lain
 
 1. Guru lain buka **URL yang sama** → klik daftar → isi nama, jawatan, unit.

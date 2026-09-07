@@ -128,6 +128,69 @@ kemudian **Install**. Muat semula halaman → anda auto-login sebagai Super Admi
 | **editor** | ✅ | ✅ | ✅ | — | — | — | — |
 | **viewer** | ✅ | — | — | — | — | — | — |
 
+## Langkah 8 (pilihan) — Digest mingguan ke Telegram & Google Chat
+
+Sistem boleh menghantar satu senarai aktiviti sekali seminggu kepada **ibu bapa**
+(group Telegram) dan **murid** (Google Chat Space). Setiap aktiviti ada **dua
+checkbox bebas** dalam borang: **"Kongsi ke Telegram"** dan **"Kongsi ke Google
+Chat"** — guru boleh pilih satu, kedua-dua, atau tiada. Hanya **tajuk, tarikh dan
+lokasi** dihantar — PIC, agensi dan keterangan dalaman tidak pernah keluar.
+
+Langkau seksyen ni sepenuhnya kalau sekolah anda tak perlukan saluran keluar.
+
+### 8.1 Sediakan bot Telegram
+
+1. Buka Telegram, cari **@BotFather**, hantar `/newbot`, ikut arahan. Salin token
+   yang diberi (bentuk `123456789:AA…`).
+2. Tambah bot itu ke setiap group ibu bapa yang hendak menerima digest.
+3. Dapatkan `chat_id` setiap group: hantar satu mesej dalam group, kemudian buka
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` dalam pelayar dan salin
+   `result[].message.chat.id` (nombor **negatif**, cth `-1001234567890`).
+
+> ⚠️ Kalau *privacy mode* bot masih ON (lalai), `getUpdates` mungkin tak
+> memaparkan mesej biasa. Hantar `/start@namabot` dalam group, atau tambah
+> `@RawDataBot` sementara untuk membaca `chat_id`.
+
+### 8.2 Sediakan webhook Google Chat
+
+1. Buka Space yang dikehendaki dalam Google Chat.
+2. Nama Space → **Apps & integrations** → **Webhooks** → **Add webhooks**.
+3. Beri nama (cth "Takwim Sekolah"), salin URL yang bermula
+   `https://chat.googleapis.com/v1/spaces/…`.
+
+### 8.3 Isi tetapan
+
+Dashboard → **System Settings** → bahagian **Digest mingguan ke ibu bapa / murid**:
+
+| Medan | Isi |
+|-------|-----|
+| Token bot Telegram | token dari 8.1 (medan ini **write-only** — nilai tersimpan tak pernah dipaparkan semula) |
+| Chat ID group Telegram | senarai `chat_id` dipisah koma |
+| Webhook Google Chat | URL dari 8.2, dipisah koma kalau lebih satu (**write-only**) |
+| Hari / Jam / Minit | bila digest dihantar (lalai Ahad 07:45) |
+
+Tekan **Simpan Tetapan** — trigger mingguan dicipta automatik.
+
+### 8.4 Beri kebenaran sekali sahaja
+
+Digest menggunakan perkhidmatan **permintaan luar** (`UrlFetchApp`) yang belum
+pernah dipakai sistem ini. Buka Apps Script Editor → pilih fungsi
+**`sendWeeklyDigest_`** → **Run** → **Allow** pada skrin kebenaran.
+
+Tanpa langkah ni, trigger mingguan akan gagal **secara senyap**. Hanya pemilik
+script (Super Admin) perlu melakukannya; guru lain tidak terjejas.
+
+### 8.5 Uji
+
+Tanda satu aktiviti akan datang dengan **kedua-dua** checkbox saluran, kemudian Run
+`sendWeeklyDigest_` sekali lagi. Mesej sepatutnya masuk ke group Telegram **dan**
+Space Chat. Ulang dengan **satu** checkbox sahaja ditanda dan sahkan mesej pergi ke
+saluran itu **sahaja**.
+
+> Digest hanya dihantar **sekali seminggu**: selepas berjaya, sistem merekod
+> penanda minggu itu. Untuk menguji berkali-kali dalam minggu yang sama, buang
+> kunci `DGSENT_…` dalam **Project Settings → Script Properties**.
+
 ---
 
 ## Kemas kini kemudian
@@ -160,6 +223,13 @@ Untuk pembangunan, deployment **`@HEAD`** (Test deployment) auto-ikut setiap
     seminit merentas semua pengguna (`DEFAULT_CONFIG.MAX_PENDING_REGISTRATIONS` /
     `MAX_REGISTRATIONS_PER_MINUTE`). Cubaan yang ditolak direkod dalam Log Audit
     (`REGISTRATION_DOMAIN_BLOCKED` / `REGISTRATION_QUEUE_FULL` / `REGISTRATION_THROTTLED`).
+- **Token Telegram & URL webhook Chat** disimpan dalam Script Properties sahaja.
+  Ia tidak pernah dipulangkan ke pelayar, tidak pernah masuk ke dalam log audit,
+  dan tidak wujud dalam repositori. Medan UI-nya **write-only**: kosong bermakna
+  "kekalkan yang tersimpan", dan ada checkbox berasingan untuk memadamnya.
+- URL webhook Google Chat ditolak kecuali ia bermula
+  `https://chat.googleapis.com/v1/spaces/` — satu salah taip tidak boleh
+  menghantar takwim sekolah ke pelayan orang lain.
 - **Tiada pangkalan data, tiada secret dalam kod.** Semua tetapan dalam Script
   Properties. Repo ini selamat untuk jadi public.
 - Kalendar cuti umum Malaysia adalah awam & baca-sahaja — selamat di-hardcode.
@@ -295,6 +365,67 @@ Press **Test Connection** — the system verifies calendar access + mail quota, 
 | **editor** | ✅ | ✅ | ✅ | — | — | — | — |
 | **viewer** | ✅ | — | — | — | — | — | — |
 
+## Step 8 (optional) — Weekly digest to Telegram & Google Chat
+
+The system can send a weekly summary of activities to **parents** (Telegram group) and
+**students** (Google Chat Space). Each activity has **two independent checkboxes** in
+the form: **"Kongsi ke Telegram"** and **"Kongsi ke Google Chat"** — teachers can pick one,
+both, or neither. Only **title, date, and location** are sent — PIC, agency, and internal
+notes never leave the system.
+
+Skip this section entirely if your school doesn't need outbound channels.
+
+### 8.1 Set up Telegram bot
+
+1. Open Telegram, search **@BotFather**, send `/newbot`, follow instructions. Copy the token
+   you receive (format: `123456789:AA…`).
+2. Add that bot to each parent group that should receive the digest.
+3. Get the `chat_id` for each group: send one message in the group, then open
+   `https://api.telegram.org/bot<TOKEN>/getUpdates` in a browser and copy
+   `result[].message.chat.id` (a **negative** number, e.g. `-1001234567890`).
+
+> ⚠️ If the bot's *privacy mode* is still ON (default), `getUpdates` may not show regular
+> messages. Send `/start@botname` in the group, or temporarily add `@RawDataBot` to read the `chat_id`.
+
+### 8.2 Set up Google Chat webhook
+
+1. Open the Space you want in Google Chat.
+2. Space name → **Apps & integrations** → **Webhooks** → **Add webhooks**.
+3. Give it a name (e.g. "Takwim School"), copy the URL starting with
+   `https://chat.googleapis.com/v1/spaces/…`.
+
+### 8.3 Fill in settings
+
+Dashboard → **System Settings** → section **Weekly digest to parents / students**:
+
+| Field | Value |
+|-------|-------|
+| Telegram bot token | token from 8.1 (this field is **write-only** — saved values are never displayed again) |
+| Telegram group chat IDs | comma-separated list of `chat_id` values |
+| Google Chat webhook | URL from 8.2, comma-separated if multiple (**write-only**) |
+| Day / Time | when digest is sent (default: Sunday 07:45) |
+
+Click **Save Settings** — the weekly trigger is created automatically.
+
+### 8.4 Grant permission once
+
+The digest uses the **external request** service (`UrlFetchApp`) that this system has never
+used before. Open Apps Script Editor → select function **`sendWeeklyDigest_`** → **Run** →
+**Allow** on the permission screen.
+
+Without this step, the weekly trigger will fail **silently**. Only the script owner (Super Admin)
+needs to do this; other teachers are unaffected.
+
+### 8.5 Test
+
+Mark one activity with **both** channel checkboxes, then Run `sendWeeklyDigest_` again. The
+message should arrive in both the Telegram group **and** the Chat Space. Repeat with only
+**one** checkbox marked and verify the message goes to **that channel only**.
+
+> Digest is sent **once per week**: after success, the system records a marker for that
+> week. To test multiple times in the same week, delete the `DGSENT_…` key in **Project
+> Settings → Script Properties**.
+
 ## Updating later
 
 ```bash
@@ -323,6 +454,12 @@ For development, the **`@HEAD`** test deployment auto-follows every `clasp push`
     minute across all users (`DEFAULT_CONFIG.MAX_PENDING_REGISTRATIONS` /
     `MAX_REGISTRATIONS_PER_MINUTE`). Rejected attempts are recorded in the audit log
     (`REGISTRATION_DOMAIN_BLOCKED` / `REGISTRATION_QUEUE_FULL` / `REGISTRATION_THROTTLED`).
+- **Telegram bot token & Google Chat webhook URL** are stored only in Script Properties.
+  They are never returned to the browser, never enter the audit log, and do not exist in
+  the repository. The UI field is **write-only**: empty means "keep what's saved", and there
+  is a separate checkbox to delete it.
+- Google Chat webhook URLs are rejected unless they start with `https://chat.googleapis.com/v1/spaces/` —
+  a single typo cannot send school activities to someone else's server.
 - **No database, no secrets in code.** All config lives in Script Properties. This
   repo is safe to be public.
 - The Malaysia public-holiday calendar is public and read-only — safe to hardcode.

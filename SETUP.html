@@ -211,6 +211,70 @@ cd takwim-digital</code></pre>
   </div>
   </div>
 
+  <div class="step">
+    <h3>Langkah 8 (pilihan) — Digest mingguan ke Telegram & Google Chat</h3>
+    <p>Sistem boleh menghantar satu senarai aktiviti sekali seminggu kepada <strong>ibu bapa</strong>
+    (group Telegram) dan <strong>murid</strong> (Google Chat Space). Setiap aktiviti ada <strong>dua
+    checkbox bebas</strong> dalam borang: <strong>"Kongsi ke Telegram"</strong> dan <strong>"Kongsi ke Google
+    Chat"</strong> — guru boleh pilih satu, kedua-dua, atau tiada. Hanya <strong>tajuk, tarikh dan
+    lokasi</strong> dihantar — PIC, agensi dan keterangan dalaman tidak pernah keluar.</p>
+    <p>Langkau seksyen ni sepenuhnya kalau sekolah anda tak perlukan saluran keluar.</p>
+
+    <h4>8.1 Sediakan bot Telegram</h4>
+    <ol>
+      <li>Buka Telegram, cari <strong>@BotFather</strong>, hantar <code>/newbot</code>, ikut arahan. Salin token
+         yang diberi (bentuk <code>123456789:AA…</code>).</li>
+      <li>Tambah bot itu ke setiap group ibu bapa yang hendak menerima digest.</li>
+      <li>Dapatkan <code>chat_id</code> setiap group: hantar satu mesej dalam group, kemudian buka
+         <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> dalam pelayar dan salin
+         <code>result[].message.chat.id</code> (nombor <strong>negatif</strong>, cth <code>-1001234567890</code>).</li>
+    </ol>
+    <div class="note">
+      ⚠️ Kalau <em>privacy mode</em> bot masih ON (lalai), <code>getUpdates</code> mungkin tak
+      memaparkan mesej biasa. Hantar <code>/start@namabot</code> dalam group, atau tambah
+      <code>@RawDataBot</code> sementara untuk membaca <code>chat_id</code>.
+    </div>
+
+    <h4>8.2 Sediakan webhook Google Chat</h4>
+    <ol>
+      <li>Buka Space yang dikehendaki dalam Google Chat.</li>
+      <li>Nama Space → <strong>Apps &amp; integrations</strong> → <strong>Webhooks</strong> → <strong>Add webhooks</strong>.</li>
+      <li>Beri nama (cth "Takwim Sekolah"), salin URL yang bermula
+         <code>https://chat.googleapis.com/v1/spaces/…</code>.</li>
+    </ol>
+
+    <h4>8.3 Isi tetapan</h4>
+    <p>Dashboard → <strong>System Settings</strong> → bahagian <strong>Digest mingguan ke ibu bapa / murid</strong>:</p>
+    <div class="tscroll">
+      <table>
+      <tr><th>Medan</th><th>Isi</th></tr>
+      <tr><td>Token bot Telegram</td><td>token dari 8.1 (medan ini <strong>write-only</strong> — nilai tersimpan tak pernah dipaparkan semula)</td></tr>
+      <tr><td>Chat ID group Telegram</td><td>senarai <code>chat_id</code> dipisah koma</td></tr>
+      <tr><td>Webhook Google Chat</td><td>URL dari 8.2, dipisah koma kalau lebih satu (<strong>write-only</strong>)</td></tr>
+      <tr><td>Hari / Jam / Minit</td><td>bila digest dihantar (lalai Ahad 07:45)</td></tr>
+    </table>
+  </div>
+    <p>Tekan <strong>Simpan Tetapan</strong> — trigger mingguan dicipta automatik.</p>
+
+    <h4>8.4 Beri kebenaran sekali sahaja</h4>
+    <p>Digest menggunakan perkhidmatan <strong>permintaan luar</strong> (<code>UrlFetchApp</code>) yang belum
+    pernah dipakai sistem ini. Buka Apps Script Editor → pilih fungsi
+    <strong><code>sendWeeklyDigest_</code></strong> → <strong>Run</strong> → <strong>Allow</strong> pada skrin kebenaran.</p>
+    <p>Tanpa langkah ni, trigger mingguan akan gagal <strong>secara senyap</strong>. Hanya pemilik
+    script (Super Admin) perlu melakukannya; guru lain tidak terjejas.</p>
+
+    <h4>8.5 Uji</h4>
+    <p>Tanda satu aktiviti akan datang dengan <strong>kedua-dua</strong> checkbox saluran, kemudian Run
+    <code>sendWeeklyDigest_</code> sekali lagi. Mesej sepatutnya masuk ke group Telegram <strong>dan</strong>
+    Space Chat. Ulang dengan <strong>satu</strong> checkbox sahaja ditanda dan sahkan mesej pergi ke
+    saluran itu <strong>sahaja</strong>.</p>
+    <div class="note">
+      Digest hanya dihantar <strong>sekali seminggu</strong>: selepas berjaya, sistem merekod
+      penanda minggu itu. Untuk menguji berkali-kali dalam minggu yang sama, buang
+      kunci <code>DGSENT_…</code> dalam <strong>Project Settings → Script Properties</strong>.
+    </div>
+  </div>
+
   <h2>Kemas kini kemudian</h2>
   <pre><code>clasp push -f</code></pre>
   <p>kemudian <strong>Deploy → Manage deployments → (edit) → Version: New version → Deploy</strong>.
@@ -221,6 +285,13 @@ cd takwim-digital</code></pre>
     <ul>
       <li><strong><code>executeAs: USER_DEPLOYING</code></strong> — semua tulisan ke Calendar jalan sebagai <em>anda</em> (deployer), bukan pelawat. Sistem peranan app yang kawal siapa boleh buat apa.</li>
       <li><strong>Identiti = email sesi Google sahaja.</strong> <code>access: DOMAIN</code> menjamin pelawat sudah login domain sah sebelum app dimuatkan. Setiap fungsi server disemak <code>requireSession_(token, kebenaran)</code> — tiada token sah = tiada data.</li>
+      <li><strong>Token Telegram &amp; URL webhook Chat</strong> disimpan dalam Script Properties sahaja.
+        Ia tidak pernah dipulangkan ke pelayar, tidak pernah masuk ke dalam log audit,
+        dan tidak wujud dalam repositori. Medan UI-nya <strong>write-only</strong>: kosong bermakna
+        "kekalkan yang tersimpan", dan ada checkbox berasingan untuk memadamnya.</li>
+      <li>URL webhook Google Chat ditolak kecuali ia bermula
+        <code>https://chat.googleapis.com/v1/spaces/</code> — satu salah taip tidak boleh
+        menghantar takwim sekolah ke pelayan orang lain.</li>
       <li><strong>Tiada pangkalan data, tiada secret dalam kod.</strong> Semua tetapan dalam Script Properties. Repo ini selamat untuk jadi public.</li>
       <li>Kalendar cuti umum Malaysia adalah awam &amp; baca-sahaja — selamat di-hardcode.</li>
     </ul>
@@ -358,6 +429,68 @@ cd takwim-digital</code></pre>
   </div>
   </div>
 
+  <div class="step">
+    <h3>Step 8 (optional) — Weekly digest to Telegram & Google Chat</h3>
+    <p>The system can send a weekly summary of activities to <strong>parents</strong>
+    (Telegram group) and <strong>students</strong> (Google Chat Space). Each activity has <strong>two
+    independent checkboxes</strong> in the form: <strong>"Kongsi ke Telegram"</strong> and <strong>"Kongsi ke Google
+    Chat"</strong> — teachers can pick one, both, or neither. Only <strong>title, date, and
+    location</strong> are sent — PIC, agency, and internal notes never leave the system.</p>
+    <p>Skip this section entirely if your school doesn't need outbound channels.</p>
+
+    <h4>8.1 Set up Telegram bot</h4>
+    <ol>
+      <li>Open Telegram, search <strong>@BotFather</strong>, send <code>/newbot</code>, follow instructions. Copy the token
+         you receive (format: <code>123456789:AA…</code>).</li>
+      <li>Add that bot to each parent group that should receive the digest.</li>
+      <li>Get the <code>chat_id</code> for each group: send one message in the group, then open
+         <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> in a browser and copy
+         <code>result[].message.chat.id</code> (a <strong>negative</strong> number, e.g. <code>-1001234567890</code>).</li>
+    </ol>
+    <div class="note">
+      ⚠️ If the bot's <em>privacy mode</em> is still ON (default), <code>getUpdates</code> may not show regular
+      messages. Send <code>/start@botname</code> in the group, or temporarily add <code>@RawDataBot</code> to read the <code>chat_id</code>.
+    </div>
+
+    <h4>8.2 Set up Google Chat webhook</h4>
+    <ol>
+      <li>Open the Space you want in Google Chat.</li>
+      <li>Space name → <strong>Apps &amp; integrations</strong> → <strong>Webhooks</strong> → <strong>Add webhooks</strong>.</li>
+      <li>Give it a name (e.g. "Takwim School"), copy the URL starting with
+         <code>https://chat.googleapis.com/v1/spaces/…</code>.</li>
+    </ol>
+
+    <h4>8.3 Fill in settings</h4>
+    <p>Dashboard → <strong>System Settings</strong> → section <strong>Weekly digest to parents / students</strong>:</p>
+    <div class="tscroll">
+      <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>Telegram bot token</td><td>token from 8.1 (this field is <strong>write-only</strong> — saved values are never displayed again)</td></tr>
+      <tr><td>Telegram group chat IDs</td><td>comma-separated list of <code>chat_id</code> values</td></tr>
+      <tr><td>Google Chat webhook</td><td>URL from 8.2, comma-separated if multiple (<strong>write-only</strong>)</td></tr>
+      <tr><td>Day / Time</td><td>when digest is sent (default: Sunday 07:45)</td></tr>
+    </table>
+  </div>
+    <p>Click <strong>Save Settings</strong> — the weekly trigger is created automatically.</p>
+
+    <h4>8.4 Grant permission once</h4>
+    <p>The digest uses the <strong>external request</strong> service (<code>UrlFetchApp</code>) that this system has never
+    used before. Open Apps Script Editor → select function <strong><code>sendWeeklyDigest_</code></strong> → <strong>Run</strong> →
+    <strong>Allow</strong> on the permission screen.</p>
+    <p>Without this step, the weekly trigger will fail <strong>silently</strong>. Only the script owner (Super Admin)
+    needs to do this; other teachers are unaffected.</p>
+
+    <h4>8.5 Test</h4>
+    <p>Mark one activity with <strong>both</strong> channel checkboxes, then Run <code>sendWeeklyDigest_</code> again. The
+    message should arrive in both the Telegram group <strong>and</strong> the Chat Space. Repeat with only
+    <strong>one</strong> checkbox marked and verify the message goes to <strong>that channel only</strong>.</p>
+    <div class="note">
+      Digest is sent <strong>once per week</strong>: after success, the system records a marker for that
+      week. To test multiple times in the same week, delete the <code>DGSENT_…</code> key in <strong>Project
+      Settings → Script Properties</strong>.
+    </div>
+  </div>
+
   <h2>Updating later</h2>
   <pre><code>clasp push -f</code></pre>
   <p>then <strong>Deploy → Manage deployments → (edit) → Version: New version → Deploy</strong>.
@@ -368,6 +501,12 @@ cd takwim-digital</code></pre>
     <ul>
       <li><strong><code>executeAs: USER_DEPLOYING</code></strong> — all Calendar writes run as <em>you</em> (the deployer), not the visitor. The app's internal role system controls who can do what.</li>
       <li><strong>Identity = Google session email only.</strong> <code>access: DOMAIN</code> guarantees a verified domain login before the app loads. Every server function is checked with <code>requireSession_(token, permission)</code> — no valid token, no data.</li>
+      <li><strong>Telegram bot token &amp; Google Chat webhook URL</strong> are stored only in Script Properties.
+        They are never returned to the browser, never enter the audit log, and do not exist in
+        the repository. The UI field is <strong>write-only</strong>: empty means "keep what's saved", and there
+        is a separate checkbox to delete it.</li>
+      <li>Google Chat webhook URLs are rejected unless they start with <code>https://chat.googleapis.com/v1/spaces/</code> —
+        a single typo cannot send school activities to someone else's server.</li>
       <li><strong>No database, no secrets in code.</strong> All config lives in Script Properties. This repo is safe to be public.</li>
       <li>The Malaysia public-holiday calendar is public and read-only — safe to hardcode.</li>
     </ul>
