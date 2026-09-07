@@ -479,6 +479,13 @@ function renderSettings(){
         <div class="field"><label>WARNA TEMA</label><div class="settingsColor"><input id="setThemeColor" type="color" value="${attr(s.themeColor)}"><span>${esc(s.themeColor)}</span></div></div>
         <div class="field"><label>PENDAFTARAN STAFF</label><select id="setRegistration"><option value="yes" ${s.allowRegistration?'selected':''}>Dibuka + Admin Approval</option><option value="no" ${!s.allowRegistration?'selected':''}>Ditutup</option></select></div>
         <div class="field"><label>WAKTU HANTAR REMINDER</label><select id="setReminderHour">${Array.from({length:24},(_,h)=>`<option value="${h}" ${Number(s.reminderHour)===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`).join('')}</select><div class="eventSub">Reminder aktiviti (email H-1/H-2/H-3) dihantar automatik lebih kurang pada jam ini setiap hari.</div></div>
+        <div class="field wide" style="border-top:1px solid var(--line);padding-top:14px"><label>DIGEST MINGGUAN KE IBU BAPA / MURID</label><div class="eventSub">Aktiviti yang ditanda <b>Kongsi ke Telegram</b> / <b>Kongsi ke Google Chat</b> dihantar sekali seminggu ke saluran masing-masing. Kosongkan token/webhook untuk mengekalkan nilai tersimpan.</div></div>
+        <div class="field wide"><label>TOKEN BOT TELEGRAM</label><input id="setTgToken" type="password" autocomplete="new-password" placeholder="${s.broadcastTgTokenSet?'••••• tersimpan — isi untuk ganti':'123456789:AA… dari @BotFather'}"><div class="eventSub">${s.broadcastTgTokenSet?'✅ Token sudah tersimpan.':'⚠️ Belum diset — digest Telegram tidak akan dihantar.'} <label style="font-weight:normal;letter-spacing:normal"><input id="setClearTgToken" type="checkbox" style="width:auto;margin:0 4px 0 10px"> padam token tersimpan</label></div></div>
+        <div class="field wide"><label>CHAT ID GROUP TELEGRAM</label><input id="setTgChatIds" value="${attr(s.broadcastTgChatIds||'')}" placeholder="-1001234567890, -1009876543210"><div class="eventSub">Dipisah koma. ID group biasanya nombor negatif — dapatkan dari <code>api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code>.</div></div>
+        <div class="field wide"><label>WEBHOOK GOOGLE CHAT</label><input id="setGchatWebhooks" type="password" autocomplete="new-password" placeholder="${s.broadcastGchatSet?'••••• '+s.broadcastGchatCount+' webhook tersimpan — isi untuk ganti':'https://chat.googleapis.com/v1/spaces/…'}"><div class="eventSub">${s.broadcastGchatSet?'✅ '+s.broadcastGchatCount+' webhook tersimpan.':'⚠️ Belum diset — digest Google Chat tidak akan dihantar.'} <label style="font-weight:normal;letter-spacing:normal"><input id="setClearGchat" type="checkbox" style="width:auto;margin:0 4px 0 10px"> padam webhook tersimpan</label></div></div>
+        <div class="field"><label>HARI HANTAR DIGEST</label><select id="setDigestDay">${['Ahad','Isnin','Selasa','Rabu','Khamis','Jumaat','Sabtu'].map((n,i)=>`<option value="${i}" ${Number(s.digestDay)===i?'selected':''}>${n}</option>`).join('')}</select></div>
+        <div class="field"><label>JAM DIGEST</label><select id="setDigestHour">${Array.from({length:24},(_,h)=>`<option value="${h}" ${Number(s.digestHour)===h?'selected':''}>${String(h).padStart(2,'0')}</option>`).join('')}</select></div>
+        <div class="field"><label>MINIT DIGEST</label><select id="setDigestMinute">${[0,15,30,45].map(m=>`<option value="${m}" ${Number(s.digestMinute)===m?'selected':''}>${String(m).padStart(2,'0')}</option>`).join('')}</select><div class="eventSub">Apps Script menghantar dalam tetingkap lebih kurang ±15 minit dari waktu ini.</div></div>
         <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
         <div class="field wide"><label>IKON (URL GAMBAR)</label><input id="setIconUrl" value="${attr(s.iconUrl||'')}" placeholder="https://.../logo.png — kosongkan untuk guna emoji 🏛️"><div class="eventSub">Direct link ke fail gambar (PNG/SVG/JPG). Mesti bermula https://</div></div>
@@ -492,7 +499,15 @@ function saveSettingsUI(btn){
     timezone:setTimezone.value.trim(),calendarId:setCalendarId.value.trim(),themeColor:setThemeColor.value,
     allowRegistration:setRegistration.value==='yes',footerText:setFooter.value.trim(),
     iconUrl:setIconUrl.value.trim(),allowedEmailDomains:setAllowedDomains.value.trim(),
-    reminderHour:parseInt(setReminderHour.value,10)
+    reminderHour:parseInt(setReminderHour.value,10),
+    broadcastTgToken:setTgToken.value.trim(),
+    clearTgToken:setClearTgToken.checked,
+    broadcastTgChatIds:setTgChatIds.value.trim(),
+    broadcastGchatWebhooks:setGchatWebhooks.value.trim(),
+    clearGchatWebhooks:setClearGchat.checked,
+    digestDay:parseInt(setDigestDay.value,10),
+    digestHour:parseInt(setDigestHour.value,10),
+    digestMinute:parseInt(setDigestMinute.value,10)
   };
   const unlock=lockBtn(btn,'Menyimpan…');
   gs('updateSystemSettings',[TOKEN,p],r=>{

@@ -238,6 +238,34 @@ function sliceBody(src, startMarker, endMarker) {
      badge.indexOf('Telegram') !== -1 && badge.indexOf('Google Chat') !== -1);
 })();
 
+(function ujianSettingsBroadcast() {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const render = sliceBody(html, 'function renderSettings(){', '\nfunction saveSettingsUI');
+  const save = sliceBody(html, 'function saveSettingsUI(btn){', '\nfunction ');
+
+  ok('settings ada medan token Telegram jenis password (tak terpapar di skrin)',
+     /id="setTgToken"[^>]*type="password"|type="password"[^>]*id="setTgToken"/.test(stripComments(render)));
+  ok('settings TIDAK cuba mengisi semula nilai token/webhook (write-only)',
+     !/[^a-zA-Z0-9_]s\.broadcastTgToken[^a-zA-Z0-9_]/.test(render) && !/[^a-zA-Z0-9_]s\.broadcastGchatWebhooks[^a-zA-Z0-9_]/.test(render));
+  ok('settings papar BENDERA "sudah diset" untuk token & webhook',
+     render.indexOf('s.broadcastTgTokenSet') !== -1 && render.indexOf('s.broadcastGchatSet') !== -1);
+  ok('settings ada checkbox padam untuk kedua-dua rahsia',
+     /id="setClearTgToken"/.test(render) && /id="setClearGchat"/.test(render));
+  ok('settings ada dropdown hari/jam/minit digest',
+     /id="setDigestDay"/.test(render) && /id="setDigestHour"/.test(render) && /id="setDigestMinute"/.test(render));
+  ok('dropdown hari guna nama Melayu bermula Ahad',
+     /Ahad/.test(render) && /Sabtu/.test(render));
+
+  ok('saveSettingsUI hantar lapan medan broadcast/digest',
+     /broadcastTgToken\s*:/.test(save) && /clearTgToken\s*:/.test(save) &&
+     /broadcastTgChatIds\s*:/.test(save) && /broadcastGchatWebhooks\s*:/.test(save) &&
+     /clearGchatWebhooks\s*:/.test(save) && /digestDay\s*:/.test(save) &&
+     /digestHour\s*:/.test(save) && /digestMinute\s*:/.test(save));
+  ok('saveSettingsUI hantar digestDay/Hour/Minute sebagai NOMBOR (parseInt)',
+     /digestDay\s*:\s*parseInt\(/.test(save) && /digestHour\s*:\s*parseInt\(/.test(save) &&
+     /digestMinute\s*:\s*parseInt\(/.test(save));
+})();
+
 // --- trigger digest (perlu ScriptApp palsu) ----------------------------------
 (function ujianSyncDigestTrigger() {
   const dipadam = [];
