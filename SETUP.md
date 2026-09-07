@@ -173,12 +173,36 @@ Tekan **Simpan Tetapan** — trigger mingguan dicipta automatik.
 
 ### 8.4 Beri kebenaran sekali sahaja
 
+> **Buat langkah ni SEBAIK SAHAJA selesai deploy — sebelum sebarang ujian lain.**
+> Sepanjang kebenaran belum diberi, **semua automasi script ini tergantung**, bukan
+> hanya ciri digest yang baharu ni.
+
 Digest menggunakan perkhidmatan **permintaan luar** (`UrlFetchApp`) yang belum
 pernah dipakai sistem ini. Buka Apps Script Editor → pilih fungsi
 **`sendWeeklyDigest_`** → **Run** → **Allow** pada skrin kebenaran.
 
 Tanpa langkah ni, trigger mingguan akan gagal **secara senyap**. Hanya pemilik
 script (Super Admin) perlu melakukannya; guru lain tidak terjejas.
+
+**Kenapa ia mendesak:** bila script mula memerlukan kebenaran BAHARU, Apps Script
+menahan **semua trigger milik pemilik** pada script ini — bukan trigger baharu
+sahaja. Ertinya **trigger peringatan harian** (`sendActivityReminders_`) yang sudah
+hidup dan digunakan ibu bapa & guru **turut gagal** sehingga **Allow** ditekan.
+Kegagalan itu senyap: Apps Script hanya menghantar emel ringkasan kegagalan yang
+sangat mudah terlepas pandang. Jadi langkah ni bukan "pasang ciri baharu" — ia
+"hidupkan semula automasi sedia ada".
+
+**Kalau `sendWeeklyDigest_` tiada dalam senarai Run:** nama fungsi berakhir dengan
+garis bawah dianggap *private*, jadi editor Apps Script mungkin tidak memaparkannya
+dalam pemilih fungsi. Tak mengapa — apa yang kita mahu hanyalah **skrin kebenaran**.
+Run mana-mana fungsi **awam** yang sedia ada (contoh `getSystemSettings`), tekan
+**Allow**, dan abaikan ralat hujah yang muncul selepas itu. Kebenaran OAuth sudah
+diberi kepada **keseluruhan script**, bukan kepada fungsi itu sahaja.
+
+> ⚠️ **JANGAN** cipta fungsi awam baharu (tanpa garis bawah) sebagai pembalut untuk
+> `sendWeeklyDigest_`. Deployment ini guna `access: DOMAIN`, jadi fungsi awam boleh
+> dipanggil oleh **mana-mana pengguna domain yang log masuk** melalui
+> `google.script.run` — sesiapa sahaja boleh mencetuskan siaran ke group ibu bapa.
 
 ### 8.5 Uji
 
@@ -409,12 +433,35 @@ Click **Save Settings** — the weekly trigger is created automatically.
 
 ### 8.4 Grant permission once
 
+> **Do this step IMMEDIATELY after deploying — before any other testing.** Until the
+> permission is granted, **all of this script's automation is paused**, not just the new
+> digest feature.
+
 The digest uses the **external request** service (`UrlFetchApp`) that this system has never
 used before. Open Apps Script Editor → select function **`sendWeeklyDigest_`** → **Run** →
 **Allow** on the permission screen.
 
 Without this step, the weekly trigger will fail **silently**. Only the script owner (Super Admin)
 needs to do this; other teachers are unaffected.
+
+**Why it is urgent:** when a script starts requiring a **new** permission, Apps Script holds
+**all of the owner's triggers** on this script — not just the new one. That means the
+**daily reminder trigger** (`sendActivityReminders_`) that parents and teachers already rely
+on **also fails** until **Allow** is clicked. The failure is silent: Apps Script only sends a
+failure-summary email that is very easy to miss. So this is not a "set up the new feature"
+step — it is a "switch the existing automation back on" step.
+
+**If `sendWeeklyDigest_` is not listed in the Run picker:** function names ending with an
+underscore are treated as *private*, so the Apps Script editor may not show it in the
+function picker. That is fine — all we need is the **consent screen**. Run any existing
+**public** function instead (e.g. `getSystemSettings`), click **Allow**, and ignore the
+argument error that follows. The OAuth grant applies to the **whole script**, not to that
+one function.
+
+> ⚠️ **DO NOT** create a new public (non-underscore) wrapper function for
+> `sendWeeklyDigest_`. This deployment uses `access: DOMAIN`, so a public function can be
+> called by **any signed-in domain user** through `google.script.run` — anyone could trigger
+> a broadcast to the parents' group.
 
 ### 8.5 Test
 

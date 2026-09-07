@@ -257,11 +257,36 @@ cd takwim-digital</code></pre>
     <p>Tekan <strong>Simpan Tetapan</strong> — trigger mingguan dicipta automatik.</p>
 
     <h4>8.4 Beri kebenaran sekali sahaja</h4>
+    <div class="note">
+      <strong>Buat langkah ni SEBAIK SAHAJA selesai deploy — sebelum sebarang ujian lain.</strong>
+      Sepanjang kebenaran belum diberi, <strong>semua automasi script ini tergantung</strong>, bukan
+      hanya ciri digest yang baharu ni.
+    </div>
     <p>Digest menggunakan perkhidmatan <strong>permintaan luar</strong> (<code>UrlFetchApp</code>) yang belum
     pernah dipakai sistem ini. Buka Apps Script Editor → pilih fungsi
     <strong><code>sendWeeklyDigest_</code></strong> → <strong>Run</strong> → <strong>Allow</strong> pada skrin kebenaran.</p>
     <p>Tanpa langkah ni, trigger mingguan akan gagal <strong>secara senyap</strong>. Hanya pemilik
     script (Super Admin) perlu melakukannya; guru lain tidak terjejas.</p>
+    <p><strong>Kenapa ia mendesak:</strong> bila script mula memerlukan kebenaran BAHARU, Apps Script
+    menahan <strong>semua trigger milik pemilik</strong> pada script ini — bukan trigger baharu sahaja.
+    Ertinya <strong>trigger peringatan harian</strong> (<code>sendActivityReminders_</code>) yang sudah hidup
+    dan digunakan ibu bapa &amp; guru <strong>turut gagal</strong> sehingga <strong>Allow</strong> ditekan.
+    Kegagalan itu senyap: Apps Script hanya menghantar emel ringkasan kegagalan yang sangat
+    mudah terlepas pandang. Jadi langkah ni bukan “pasang ciri baharu” — ia “hidupkan semula
+    automasi sedia ada”.</p>
+    <p><strong>Kalau <code>sendWeeklyDigest_</code> tiada dalam senarai Run:</strong> nama fungsi berakhir
+    dengan garis bawah dianggap <em>private</em>, jadi editor Apps Script mungkin tidak
+    memaparkannya dalam pemilih fungsi. Tak mengapa — apa yang kita mahu hanyalah
+    <strong>skrin kebenaran</strong>. Run mana-mana fungsi <strong>awam</strong> yang sedia ada (contoh
+    <code>getSystemSettings</code>), tekan <strong>Allow</strong>, dan abaikan ralat hujah yang muncul
+    selepas itu. Kebenaran OAuth sudah diberi kepada <strong>keseluruhan script</strong>, bukan kepada
+    fungsi itu sahaja.</p>
+    <div class="note">
+      ⚠️ <strong>JANGAN</strong> cipta fungsi awam baharu (tanpa garis bawah) sebagai pembalut untuk
+      <code>sendWeeklyDigest_</code>. Deployment ini guna <code>access: DOMAIN</code>, jadi fungsi awam
+      boleh dipanggil oleh <strong>mana-mana pengguna domain yang log masuk</strong> melalui
+      <code>google.script.run</code> — sesiapa sahaja boleh mencetuskan siaran ke group ibu bapa.
+    </div>
 
     <h4>8.5 Uji</h4>
     <p>Tanda satu aktiviti akan datang dengan <strong>kedua-dua</strong> checkbox saluran, kemudian Run
@@ -474,11 +499,34 @@ cd takwim-digital</code></pre>
     <p>Click <strong>Save Settings</strong> — the weekly trigger is created automatically.</p>
 
     <h4>8.4 Grant permission once</h4>
+    <div class="note">
+      <strong>Do this step IMMEDIATELY after deploying — before any other testing.</strong> Until the
+      permission is granted, <strong>all of this script's automation is paused</strong>, not just the new
+      digest feature.
+    </div>
     <p>The digest uses the <strong>external request</strong> service (<code>UrlFetchApp</code>) that this system has never
     used before. Open Apps Script Editor → select function <strong><code>sendWeeklyDigest_</code></strong> → <strong>Run</strong> →
     <strong>Allow</strong> on the permission screen.</p>
     <p>Without this step, the weekly trigger will fail <strong>silently</strong>. Only the script owner (Super Admin)
     needs to do this; other teachers are unaffected.</p>
+    <p><strong>Why it is urgent:</strong> when a script starts requiring a <strong>new</strong> permission, Apps Script
+    holds <strong>all of the owner's triggers</strong> on this script — not just the new one. That means the
+    <strong>daily reminder trigger</strong> (<code>sendActivityReminders_</code>) that parents and teachers already
+    rely on <strong>also fails</strong> until <strong>Allow</strong> is clicked. The failure is silent: Apps Script only
+    sends a failure-summary email that is very easy to miss. So this is not a “set up the new
+    feature” step — it is a “switch the existing automation back on” step.</p>
+    <p><strong>If <code>sendWeeklyDigest_</code> is not listed in the Run picker:</strong> function names ending
+    with an underscore are treated as <em>private</em>, so the Apps Script editor may not show it in
+    the function picker. That is fine — all we need is the <strong>consent screen</strong>. Run any existing
+    <strong>public</strong> function instead (e.g. <code>getSystemSettings</code>), click <strong>Allow</strong>, and ignore
+    the argument error that follows. The OAuth grant applies to the <strong>whole script</strong>, not to
+    that one function.</p>
+    <div class="note">
+      ⚠️ <strong>DO NOT</strong> create a new public (non-underscore) wrapper function for
+      <code>sendWeeklyDigest_</code>. This deployment uses <code>access: DOMAIN</code>, so a public function
+      can be called by <strong>any signed-in domain user</strong> through <code>google.script.run</code> — anyone
+      could trigger a broadcast to the parents' group.
+    </div>
 
     <h4>8.5 Test</h4>
     <p>Mark one activity with <strong>both</strong> channel checkboxes, then Run <code>sendWeeklyDigest_</code> again. The
