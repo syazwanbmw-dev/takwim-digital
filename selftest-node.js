@@ -472,9 +472,15 @@ function fakeLockGagalSekali() {
   // (g) addAudit_ SENDIRI meletup pada sasaran PERTAMA -- sasaran KEDUA mesti tetap
   // dicuba. Ini yang bezakan gerbang ni drpd ujian (c) di atas: (c) buktikan fetch yang
   // gagal tak henti gelung; ujian ni buktikan addAudit_ yang gagal pun tak henti gelung.
+  // NOTA: kegagalan sasaran pertama MESTI network-throw (bukan HTTP-code) supaya laluan
+  // ke addAudit_ ialah catch LUAR sink -- itulah waitLock PERTAMA-sekali dlm ujian ni;
+  // kalau guna HTTP-code, ia jatuh ke cawangan gagal-HTTP yang addAudit_ dipagar BERASINGAN,
+  // dan kalau pagar itu ditanggalkan, exception terlepas ke catch luar pula yang addAudit_
+  // nya jadi waitLock KEDUA -- berjaya di bawah fakeLockGagalSekali(), jadi ujian ni tak
+  // pernah gigit walau pagar mana pun ditanggalkan.
   const p7 = fakeProps({ APP_CONFIG_V3: CFG_UJI });
   const f7 = fakeUrlFetch(function (url, params, n) {
-    return n === 1 ? { code: 403, body: '{"ok":false,"description":"bot was kicked"}' } : {};
+    return n === 1 ? { error: 'rangkaian putus' } : {};
   });
   const a7 = loadCode(['sendToTelegram_'], { UrlFetchApp: f7.api,
     LockService: fakeLockGagalSekali(),
