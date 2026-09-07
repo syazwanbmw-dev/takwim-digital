@@ -934,7 +934,7 @@ function refreshData(){gs('getDashboardData',[TOKEN],r=>{DATA=r;CAL={year:r.mont
 
 function bindNav(){document.querySelectorAll('.navbtn[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)))}
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.page===id));sidebar.classList.remove('open');if(id==='usersPage')renderUsers();if(id==='auditPage')renderAudit();if(id==='settingsPage')renderSettings()}
-function closeModal(id){document.getElementById(id).classList.remove('show')}
+function closeModal(id){const m=document.getElementById(id);m.classList.remove('show');const b=m.querySelector('.modalBox');if(b)b.scrollTop=0}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3800)}
 function showError(e){
   console.error(e);
