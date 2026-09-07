@@ -238,6 +238,23 @@ function sliceBody(src, startMarker, endMarker) {
      badge.indexOf('Telegram') !== -1 && badge.indexOf('Google Chat') !== -1);
 })();
 
+// Sisi PARSE (parseShareChannels_) berlabuh pada permulaan baris, jadi "Kongsi:" di
+// tengah ayat BUKAN penanda. Sisi BUANG (cleanDescription_) mesti berlabuh SAMA --
+// kalau tidak, guru yang menaip "kongsi" sebagai perkataan Melayu biasa dalam
+// KETERANGAN kehilangan separuh ayatnya pada simpanan berikutnya, senyap.
+(function ujianKongsiBerlabuhSimetri() {
+  const api = loadCode(['cleanDescription_', 'parseShareChannels_']);
+  const ayat = 'Kita akan Kongsi: tg dgn PIBG nanti';
+  ok('cleanDescription_ TIDAK potong "Kongsi:" di tengah ayat (prosa guru kekal utuh)',
+     api.cleanDescription_(ayat) === ayat);
+  ok('parseShareChannels_ dan cleanDescription_ berlabuh SAMA pada ayat yang sama',
+     eq(api.parseShareChannels_(ayat), []) && api.cleanDescription_(ayat) === ayat);
+  // Berpasangan: pagar baharu tak boleh melembikkan kes yang memang patut dibuang.
+  ok('cleanDescription_ TETAP buang baris penanda Kongsi yang sebenar',
+     api.cleanDescription_('Perhimpunan bulanan\nKongsi: tg,gchat') === 'Perhimpunan bulanan' &&
+     api.cleanDescription_('Kongsi: gchat') === '');
+})();
+
 (function ujianSettingsBroadcast() {
   const html = fs.readFileSync(HTML_PATH, 'utf8');
   const render = sliceBody(html, 'function renderSettings(){', '\nfunction saveSettingsUI');
@@ -264,6 +281,31 @@ function sliceBody(src, startMarker, endMarker) {
   ok('saveSettingsUI hantar digestDay/Hour/Minute sebagai NOMBOR (parseInt)',
      /digestDay\s*:\s*parseInt\(/.test(save) && /digestHour\s*:\s*parseInt\(/.test(save) &&
      /digestMinute\s*:\s*parseInt\(/.test(save));
+})();
+
+// Medan TOKEN bertaip password, jadi token yang tersalah tampal ke dalam medan
+// CHAT ID sebelahnya TIDAK KELIHATAN oleh admin. Nilai itu gagal validasi chat_id --
+// dan kalau mesej ralat mengulang nilainya, token penuh mendarat dalam toast UI DAN
+// dalam rekod eksekusi Cloud Logging. Ralat mesti sebut NOMBOR entri sahaja.
+(function ujianRalatChatIdTidakUlangNilai() {
+  const api = loadCode(['validateSetupInput_']);
+  const asas = {
+    appName: 'Takwim', officeName: 'SK Salor', shortName: 'SKS',
+    timezone: 'Asia/Kuala_Lumpur', calendarId: 'x@group.calendar.google.com',
+    adminEmail: 'admin@sekolah.edu.my', themeColor: '#0b6ef3'
+  };
+  const TOKEN_TERSALAH_TAMPAL = '123456789:AAHdqTcvbXcvbXcvbXcvbXcvbXcvbXcvbXc';
+  let mesej = '';
+  try {
+    api.validateSetupInput_(Object.assign({}, asas,
+      { broadcastTgChatIds: '-100123, ' + TOKEN_TERSALAH_TAMPAL }));
+  } catch (e) { mesej = e.message; }
+  ok('validateSetupInput_ TOLAK token yang tersalah tampal dalam medan chat_id',
+     mesej.indexOf('chat_id') !== -1);
+  ok('mesej ralat chat_id TIDAK memuatkan nilai itu sendiri (token boleh mendarat di sini)',
+     mesej !== '' && mesej.indexOf(TOKEN_TERSALAH_TAMPAL) === -1 && mesej.indexOf('AAHdq') === -1);
+  ok('mesej ralat chat_id sebut NOMBOR entri supaya admin tahu yang mana rosak',
+     /#2/.test(mesej));
 })();
 
 // --- trigger digest (perlu ScriptApp palsu) ----------------------------------
@@ -567,6 +609,26 @@ function kunciMingguIni(api) {
      d3.fetch.calls.length === 1 && d3.fetch.calls[0].url.indexOf('api.telegram.org') !== -1);
 })();
 
+(function ujianDigestSaluranBertandaBelumDikonfig() {
+  // Jurang pelancaran sebenar: Telegram sudah dikonfig, Chat BELUM. Minggu ni satu-satunya
+  // aktiviti bertanda ialah 'gchat'. Senarai GABUNGAN tidak kosong, jadi pagar lama
+  // membenarkan aliran teruskan -- tetapi kedua-dua gerbang hantar palsu, jadi TIADA
+  // apa dihantar sedangkan penanda DGSENT_ dibakar. Minggu itu hilang KEKAL (kecuali
+  // Script Property dipadam manual) walaupun webhook Chat diisi kemudian.
+  const hariIni = function (n) { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n); x.setHours(9); return x; };
+  const d = duniaDigest({
+    cfg: { BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: '' },
+    events: [
+      { id: 'g1', title: 'Kuiz Sains CHAT', description: 'Kongsi: gchat\n[PPD_CATEGORY:program]',
+        location: 'Makmal', start: hariIni(1), end: hariIni(1), allDay: false }
+    ]
+  });
+  d.api.sendWeeklyDigest_();
+  ok('saluran bertanda BELUM dikonfig -> TIADA fetch langsung', d.fetch.calls.length === 0);
+  ok('saluran bertanda BELUM dikonfig -> penanda DGSENT_ TIDAK dibakar (minggu masih boleh keluar)',
+     d.props.store[kunciMingguIni(d.api)] === undefined);
+})();
+
 (function ujianDigestMingguKosong() {
   const d = duniaDigest({ events: [
     { id: 'e9', title: 'Mesyuarat', description: '[PPD_CATEGORY:mesyuarat]',
@@ -640,6 +702,27 @@ function kunciMingguIni(api) {
   ok('kegagalan PropertiesService (bukan rangkaian) TIDAK melempar keluar dari handler trigger', !meletup);
   ok('kegagalan PropertiesService tetap diaudit sebagai DIGEST_RUN_FAILED',
      JSON.stringify(auditRows(propsAsas)).indexOf('DIGEST_RUN_FAILED') !== -1);
+})();
+
+(function ujianDigestKegagalanPropertiesBERTERUSAN() {
+  // Ujian di atas membiarkan servis "pulih" selepas 2 panggilan -- ia TIDAK membuktikan
+  // gangguan BERTERUSAN dapat ditanggung. Di sini SETIAP getProperty gagal, jadi
+  // addAudit_ sendiri meletup dari dalam (addAudit_ baca PPD_AUDIT_V23, kemudian
+  // getConfig_() untuk MAX_AUDIT_ROWS -- panggilan kedua itu TIDAK berpagar dalam
+  // addAudit_). addAudit_ ialah kod sedia ada di luar skop; jadi sendWeeklyDigest_
+  // yang mesti memagar panggilan auditnya sendiri. Kontrak: handler trigger tak
+  // berjadual TIDAK BOLEH sekali-kali melempar keluar, walau audit pun hilang.
+  const propsAsas = fakeProps({ APP_CONFIG_V3: CFG_UJI });
+  propsAsas.api.getProperty = function () {
+    throw new Error('PropertiesService: servis terganggu BERTERUSAN');
+  };
+  const api = loadCode(['sendWeeklyDigest_'], {
+    PropertiesService: { getScriptProperties: function () { return propsAsas.api; } }
+  });
+  let meletup = false;
+  try { api.sendWeeklyDigest_(); } catch (e) { meletup = true; }
+  ok('kegagalan PropertiesService BERTERUSAN (audit pun gagal) TIDAK melempar keluar dari handler trigger',
+     !meletup);
 })();
 
 (function ujianPruneDigestMarkers() {

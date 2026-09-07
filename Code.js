@@ -140,12 +140,17 @@ function validateSetupInput_(input) {
   }
   // chat_id group ialah nombor (biasanya NEGATIF); channel awam boleh guna @username.
   // Menolak apa-apa yang lain menangkap ralat tampal biasa (tampal JSON penuh getUpdates).
-  const idRosak = parseCsvList_(cfg.BROADCAST_TG_CHAT_IDS).filter(function (id) {
-    return !/^-?\d{1,20}$/.test(id) && !/^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(id);
+  // Ralat sebut NOMBOR entri, bukan NILAI: medan token di sebelah bertaip password, jadi
+  // token yang tersalah tampal ke sini tak kelihatan oleh admin. Nilai itu gagal validasi
+  // di bawah -- kalau ia diulang dalam mesej, token penuh mendarat dalam toast UI DAN
+  // dalam rekod eksekusi Cloud Logging.
+  const idRosak = [];
+  parseCsvList_(cfg.BROADCAST_TG_CHAT_IDS).forEach(function (id, i) {
+    if (!/^-?\d{1,20}$/.test(id) && !/^@[A-Za-z][A-Za-z0-9_]{4,31}$/.test(id)) idRosak.push(i + 1);
   });
   if (idRosak.length) {
-    throw new Error('chat_id Telegram tidak sah: ' + idRosak.join(', ') +
-                    '. Guna nombor (cth -1001234567890) atau @namachannel.');
+    throw new Error('chat_id Telegram #' + idRosak.join(', #') +
+                    ' tidak sah. Guna nombor (cth -1001234567890) atau @namachannel.');
   }
   // Hos DIKUNCI: webhook Chat sentiasa di chat.googleapis.com. Tanpa pagar ni, satu
   // salah taip menghantar seluruh digest ke hos milik orang lain.
@@ -1409,7 +1414,10 @@ function cleanDescription_(description) {
     // Buang baris Kongsi dari paparan: kalau tak, penanda muncul dalam kotak
     // KETERANGAN bila guru edit, kemudian ditulis semula sebagai teks biasa --
     // penanda berganda, dan aktiviti kekal "dikongsi" walau checkbox dibuang.
-    .replace(/\n?Kongsi:\s*.+/ig, '')
+    // BERLABUH pada permulaan baris, SAMA seperti parseShareChannels_. "kongsi" ialah
+    // perkataan Melayu biasa: tanpa labuh, ayat guru macam "Kita akan Kongsi: tg dgn
+    // PIBG" dipotong senyap di sini walaupun sisi parse betul-betul mengabaikannya.
+    .replace(/(?:^|\n)Kongsi:[^\n]*/ig, '')
     .trim();
 }
 
@@ -2090,9 +2098,14 @@ function sendWeeklyDigest_() {
     const tgEvents = events.filter(function (e) { return e.shareChannels.indexOf('tg') !== -1; });
     const gchatEvents = events.filter(function (e) { return e.shareChannels.indexOf('gchat') !== -1; });
 
-    // Minggu tanpa sebarang aktiviti bertanda: skip SENYAP dan JANGAN set penanda,
-    // supaya aktiviti yang ditanda lewat pada minggu yang sama masih boleh keluar.
-    if (!tgEvents.length && !gchatEvents.length) return;
+    // Pagar ini bertanya "ada apa-apa yang AKAN dihantar?", bukan sekadar "ada aktiviti
+    // bertanda?" -- dua soalan berbeza. Contoh: Telegram sudah dikonfig, Chat belum, dan
+    // satu-satunya aktiviti bertanda minggu ni ialah 'gchat'. Senarai gabungan tidak
+    // kosong, tetapi kedua-dua gerbang hantar di bawah palsu. Kalau kita teruskan,
+    // penanda DGSENT_ dibakar tanpa sebarang mesej keluar dan minggu itu hilang KEKAL
+    // walaupun webhook Chat diisi kemudian. Skip SENYAP dan JANGAN set penanda.
+    const adaHantar = (tgSedia && tgEvents.length) || (gcSedia && gchatEvents.length);
+    if (!adaHantar) return;
 
     const props = PropertiesService.getScriptProperties();
     const kunci = 'DGSENT_' + isoWeekKey_(today);
@@ -2113,7 +2126,13 @@ function sendWeeklyDigest_() {
     props.setProperty(kunci, String(Date.now()));
     pruneDigestMarkers_();
   } catch (e) {
-    addAudit_('DIGEST_RUN_FAILED', e.message, adminEmail);
+    // addAudit_ SENDIRI boleh meletup: LockService.waitLock tamat masa, atau
+    // PropertiesService gagal BERTERUSAN (addAudit_ panggil getConfig_() untuk
+    // MAX_AUDIT_ROWS tanpa pagar). Ia kod sedia ada di luar skop ciri ni, jadi
+    // pagar diletak DI SINI. Handler ni jalan dari trigger masa tanpa sesi: kalau
+    // pengecualian kedua lepas keluar, tiada siapa nampak pun. Audit yang hilang
+    // lebih murah daripada trigger yang meletup.
+    try { addAudit_('DIGEST_RUN_FAILED', e.message, adminEmail); } catch (e2) { /* sengaja senyap */ }
   }
 }
 
