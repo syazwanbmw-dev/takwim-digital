@@ -584,6 +584,36 @@ function kunciMingguIni(api) {
      d.props.store[kunciMingguIni(d.api)] !== undefined);
 })();
 
+(function ujianDigestKegagalanPropertiesTidakMeletup() {
+  // Berbeza dari ujian rangkaian di atas: ini simulasi PropertiesService SENDIRI gagal
+  // (kuota/servis terganggu) -- mod kegagalan Apps Script yang nyata dan didokumenkan.
+  // getConfig_() ialah baris PERTAMA dalam try sendWeeklyDigest_, jadi getProperty yang
+  // throw di situ mencetuskan catch. Dua panggilan getProperty PERTAMA gagal (lepas itu
+  // servis "pulih"): panggilan #1 = getConfig_() dalam try; panggilan #2 = SAMA ADA
+  // getConfig_() kedua dalam catch (kod LAMA -- ini akan throw SEBELUM addAudit_ sempat
+  // dipanggil, sebab ia dinilai sebagai hujah) ATAU props.getProperty('PPD_AUDIT_V23')
+  // dalam addAudit_ (kod BAIK -- ditangkap oleh try dalamannya sendiri, rows jadi []).
+  // Kalau catch masih panggil getConfig_() lagi, pengecualian ke-2 ni lepaskan terus
+  // keluar dari sendWeeklyDigest_ -- itulah dapatan pemeriksa.
+  let panggilan = 0;
+  const cfgJson = CFG_UJI;
+  const propsAsas = fakeProps({ APP_CONFIG_V3: cfgJson });
+  const getPropertyAsal = propsAsas.api.getProperty;
+  propsAsas.api.getProperty = function (k) {
+    panggilan++;
+    if (panggilan <= 2) throw new Error('PropertiesService: servis terganggu buat sementara');
+    return getPropertyAsal(k);
+  };
+  const api = loadCode(['sendWeeklyDigest_'], {
+    PropertiesService: { getScriptProperties: function () { return propsAsas.api; } }
+  });
+  let meletup = false;
+  try { api.sendWeeklyDigest_(); } catch (e) { meletup = true; }
+  ok('kegagalan PropertiesService (bukan rangkaian) TIDAK melempar keluar dari handler trigger', !meletup);
+  ok('kegagalan PropertiesService tetap diaudit sebagai DIGEST_RUN_FAILED',
+     JSON.stringify(auditRows(propsAsas)).indexOf('DIGEST_RUN_FAILED') !== -1);
+})();
+
 (function ujianPruneDigestMarkers() {
   const seed = { APP_CONFIG_V3: CFG_UJI, PPD_USERS_V23: '{}' };
   for (let i = 1; i <= 9; i++) seed['DGSENT_2026-W' + (i < 10 ? '0' + i : i)] = '1';

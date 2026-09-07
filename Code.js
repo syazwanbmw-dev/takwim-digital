@@ -2058,8 +2058,18 @@ function sendToGoogleChat_(text, webhooksCsv) {
 // untuk memberi kebenaran "sambung ke perkhidmatan luar" (UrlFetchApp). Tanpa itu,
 // eksekusi trigger gagal SENYAP.
 function sendWeeklyDigest_() {
+  // adminEmail diselesaikan SEKALI di sini (bukan dalam catch) supaya catch di bawah
+  // TIDAK perlu panggil getConfig_() lagi. getConfig_() baca PropertiesService --
+  // kalau PUNCA kegagalan asal ialah PropertiesService sendiri (kuota/servis terganggu),
+  // panggilan kedua akan gagal juga dan pengecualian KEDUA itu (dinilai sebagai hujah
+  // kepada addAudit_ SEBELUM addAudit_ sempat jalan) lepaskan terus keluar dari fungsi
+  // ini -- melanggar syarat "trigger handler tak boleh sekali-kali throw keluar".
+  // Kalau getConfig_() gagal pada percubaan PERTAMA (baris seterusnya), adminEmail
+  // kekal undefined dan addAudit_ tetap selamat (normalizeEmail_ terima undefined).
+  let adminEmail;
   try {
     const cfg = getConfig_();
+    adminEmail = cfg.ADMIN_EMAIL;
     // Telegram perlu token DAN sekurang-kurangnya satu chat_id; Chat perlu webhook.
     // Kalau tiada saluran langsung yang lengkap -- tak ada apa nak buat.
     const tgSedia = !!(cfg.BROADCAST_TG_TOKEN && cfg.BROADCAST_TG_CHAT_IDS);
@@ -2103,7 +2113,7 @@ function sendWeeklyDigest_() {
     props.setProperty(kunci, String(Date.now()));
     pruneDigestMarkers_();
   } catch (e) {
-    addAudit_('DIGEST_RUN_FAILED', e.message, getConfig_().ADMIN_EMAIL);
+    addAudit_('DIGEST_RUN_FAILED', e.message, adminEmail);
   }
 }
 
