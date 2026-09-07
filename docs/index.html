@@ -287,9 +287,45 @@
     <li>Lalai <strong>tidak</strong> bertanda — aktiviti dalaman kekal dalaman.</li>
     <li>Hanya <strong>tajuk, tarikh dan lokasi</strong> dihantar keluar. PIC, agensi dan keterangan
       tidak pernah dikongsi.</li>
-    <li>Digest hanya keluar kalau Super Admin sudah menyiapkan tetapan Telegram/Chat
-      (Langkah 8 dalam panduan pemasangan).</li>
   </ul>
+  <p>Langkau bahagian ni sepenuhnya kalau sekolah anda tak perlukan saluran keluar.</p>
+
+  <h3>Sediakan bot Telegram (untuk group ibu bapa)</h3>
+  <ol>
+    <li>Buka Telegram, cari <strong>@BotFather</strong>, hantar <code>/newbot</code>, ikut arahan. Salin
+      token yang diberi (bentuk <code>123456789:AA…</code>).</li>
+    <li>Tambah bot itu ke setiap group ibu bapa yang hendak menerima digest.</li>
+    <li>Dapatkan <code>chat_id</code> setiap group: hantar satu mesej dalam group, kemudian buka
+      <code>https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</code> dalam pelayar dan salin
+      <code>result[].message.chat.id</code> (nombor <strong>negatif</strong>, cth
+      <code>-1001234567890</code>).</li>
+  </ol>
+  <div class="note">⚠️ Kalau <em>privacy mode</em> bot masih ON (lalai), <code>getUpdates</code> mungkin
+    tak memaparkan mesej biasa. Hantar <code>/start@namabot</code> dalam group, atau tambah
+    <strong>@RawDataBot</strong> sementara untuk membaca <code>chat_id</code>.</div>
+
+  <h3>Sediakan webhook Google Chat (untuk Space murid)</h3>
+  <ol>
+    <li>Buka Space yang dikehendaki dalam Google Chat.</li>
+    <li>Nama Space → <strong>Apps &amp; integrations</strong> → <strong>Webhooks</strong> →
+      <strong>Add webhooks</strong>.</li>
+    <li>Beri nama (cth "Takwim Sekolah"), salin URL yang bermula
+      <code>https://chat.googleapis.com/v1/spaces/…</code>.</li>
+  </ol>
+
+  <h3>Isi tetapan dalam System Settings</h3>
+  <div class="tscroll">
+    <table>
+      <tr><th>Medan</th><th>Isi</th></tr>
+      <tr><td>Token bot Telegram</td><td>token dari langkah di atas (medan ini <strong>write-only</strong>
+        — nilai tersimpan tak pernah dipaparkan semula)</td></tr>
+      <tr><td>Chat ID group Telegram</td><td>senarai <code>chat_id</code> dipisah koma</td></tr>
+      <tr><td>Webhook Google Chat</td><td>URL dari langkah di atas, dipisah koma kalau lebih satu
+        (<strong>write-only</strong>)</td></tr>
+      <tr><td>Hari / Jam / Minit</td><td>bila digest dihantar (lalai Ahad 07:45)</td></tr>
+    </table>
+  </div>
+  <p>Tekan <strong>Simpan Tetapan</strong> — trigger mingguan dicipta automatik.</p>
 
   <div class="step">
     <h2><span class="n">9</span>Jemput guru lain</h2>
