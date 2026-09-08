@@ -194,15 +194,37 @@ sangat mudah terlepas pandang. Jadi langkah ni bukan "pasang ciri baharu" — ia
 
 **Kalau `sendWeeklyDigest_` tiada dalam senarai Run:** nama fungsi berakhir dengan
 garis bawah dianggap *private*, jadi editor Apps Script mungkin tidak memaparkannya
-dalam pemilih fungsi. Tak mengapa — apa yang kita mahu hanyalah **skrin kebenaran**.
-Run mana-mana fungsi **awam** yang sedia ada (contoh `getSystemSettings`), tekan
-**Allow**, dan abaikan ralat hujah yang muncul selepas itu. Kebenaran OAuth sudah
-diberi kepada **keseluruhan script**, bukan kepada fungsi itu sahaja.
+dalam pemilih fungsi. **Jangan** run fungsi awam lain sebagai ganti (cth
+`getSystemSettings`) — kebenaran skop disemak **secara dinamik**, iaitu skrin
+**Allow** hanya timbul bila kod yang dijalankan **betul-betul sampai** ke baris yang
+memanggil `UrlFetchApp` sendiri. Fungsi seperti `getSystemSettings` tidak pernah
+sampai baris itu, jadi ia **tidak akan** mencetuskan skrin kebenaran langsung —
+walaupun "Run" nampak berjaya tanpa ralat.
+
+Cara betul: buka Apps Script Editor **terus di script.google.com** (bukan kod
+tempatan / `clasp`), tambah fungsi sementara ini di hujung `Code.js`:
+
+```js
+function AUTH_SEMENTARA_JANGAN_COMMIT() { sendWeeklyDigest_(); }
+```
+
+Pilih fungsi ni dalam pemilih Run → **Run** → skrin kebenaran akan timbul (sebab
+kini benar-benar sampai `UrlFetchApp`) → **Allow**. Kebenaran OAuth yang diberi
+terpakai untuk **keseluruhan script**, bukan hanya fungsi sementara ni. Selepas
+selesai, **padam fungsi sementara ini balik** dari editor online — ia sengaja tidak
+ditulis ke repo/`clasp`, jangan `clasp pull` balik pun.
+
+> ⚠️ **WAJIB buat di desktop/laptop, bukan telefon.** Di pelayar mobile, skrin
+> kebenaran **gagal tanpa amaran** — tiada popup langsung, terus keluar ralat
+> `You do not have permission to call UrlFetchApp.fetch...`.
 
 > ⚠️ **JANGAN** cipta fungsi awam baharu (tanpa garis bawah) sebagai pembalut untuk
-> `sendWeeklyDigest_`. Deployment ini guna `access: DOMAIN`, jadi fungsi awam boleh
-> dipanggil oleh **mana-mana pengguna domain yang log masuk** melalui
-> `google.script.run` — sesiapa sahaja boleh mencetuskan siaran ke group ibu bapa.
+> `sendWeeklyDigest_` **dalam kod yang di-`clasp push`/commit**. Deployment ini guna
+> `access: DOMAIN`, jadi fungsi awam boleh dipanggil oleh **mana-mana pengguna
+> domain yang log masuk** melalui `google.script.run` — sesiapa sahaja boleh
+> mencetuskan siaran ke group ibu bapa. Fungsi sementara di atas selamat kerana ia
+> wujud **hanya sekejap dalam editor online**, tidak pernah masuk repo atau
+> deployment production, dan dipadam sebaik selesai.
 
 ### 8.5 Uji
 
@@ -453,15 +475,36 @@ step — it is a "switch the existing automation back on" step.
 
 **If `sendWeeklyDigest_` is not listed in the Run picker:** function names ending with an
 underscore are treated as *private*, so the Apps Script editor may not show it in the
-function picker. That is fine — all we need is the **consent screen**. Run any existing
-**public** function instead (e.g. `getSystemSettings`), click **Allow**, and ignore the
-argument error that follows. The OAuth grant applies to the **whole script**, not to that
-one function.
+function picker. **Do not** run another public function instead (e.g. `getSystemSettings`)
+— scope permission is checked **dynamically**, meaning the **Allow** screen only appears
+when the code actually executing **reaches the line** that calls `UrlFetchApp` itself.
+A function like `getSystemSettings` never reaches that line, so it will **not** trigger
+the consent screen at all — even though "Run" appears to succeed with no error.
+
+The correct workaround: open Apps Script Editor **directly at script.google.com** (not
+your local code / `clasp`), add this temporary function at the end of `Code.js`:
+
+```js
+function AUTH_TEMP_DO_NOT_COMMIT() { sendWeeklyDigest_(); }
+```
+
+Select it in the Run picker → **Run** → the consent screen will appear (because it now
+genuinely reaches `UrlFetchApp`) → **Allow**. The OAuth grant applies to the **whole
+script**, not just this temporary function. Once done, **delete the temporary function**
+from the online editor again — it is deliberately never written to the repo/`clasp`, so
+don't `clasp pull` it back either.
+
+> ⚠️ **MUST be done on desktop/laptop, not a phone.** On mobile browsers, the consent
+> screen **fails silently** — no popup at all, just an immediate
+> `You do not have permission to call UrlFetchApp.fetch...` error.
 
 > ⚠️ **DO NOT** create a new public (non-underscore) wrapper function for
-> `sendWeeklyDigest_`. This deployment uses `access: DOMAIN`, so a public function can be
-> called by **any signed-in domain user** through `google.script.run` — anyone could trigger
-> a broadcast to the parents' group.
+> `sendWeeklyDigest_` **in code that gets `clasp push`ed/committed**. This deployment
+> uses `access: DOMAIN`, so a public function can be called by **any signed-in domain
+> user** through `google.script.run` — anyone could trigger a broadcast to the parents'
+> group. The temporary function above is safe because it exists **only briefly in the
+> online editor**, never reaches the repo or the production deployment, and is deleted
+> right after use.
 
 ### 8.5 Test
 

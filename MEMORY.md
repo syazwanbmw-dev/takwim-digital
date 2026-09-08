@@ -3,10 +3,19 @@
 > Ingatan projek: status semasa, sejarah, keputusan master, gotcha. Baca lepas `CLAUDE.md`
 > (tiada `CLAUDE.md` lagi untuk projek ni — cipta bila perlu arahan operasi stabil).
 
-## Status Semasa (2026-09-07)
+## Status Semasa (2026-09-07 malam)
 
 🟢 **LIVE production `@23`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
-`master` == `origin/master` @ `5febeee`, 21 commit di atas base `d6984a3`.
+`master` == `origin/master` @ `bc82cd5` (docs sahaja — lihat bawah; kod Apps Script kekal `@23`).
+
+**2026-09-07 malam:** Sesi tanya-jawab santai lepas launch. Satu perubahan dibuat —
+`docs/index.html` (laman awam `syazwanbmw-dev.github.io/takwim-digital/`) tambah arahan
+BotFather + `chat_id` + webhook Google Chat TERUS dalam seksyen "Kongsi aktiviti", sebab
+sebelum ni ia cuma rujuk `SETUP.md` yang di-link di footer untuk pengguna teknikal sahaja —
+cikgu biasa yang ikut panduan visual tak sampai baca arahan sebenar. Commit `bc82cd5`, push
+terus ke `master` (GitHub Pages serve dari `docs/` di branch ni, tiada branch `test` untuk
+projek GAS). Selebihnya sesi ni: klarifikasi soalan master (lihat bawah) + brainstorm idea
+feature (tak commit bina).
 
 **Feature terbaharu: Digest Mingguan Telegram + Google Chat** — SIAP PENUH, LIVE, dan **teruji
 hujung-ke-hujung dengan mesej Telegram SEBENAR** (bukan cuma unit test). Dibina guna
@@ -81,8 +90,12 @@ tepat (senang tersasar).
   Run dia, padam balik lepas siap. **AWAS:** `clasp push -f` timpa SEMUA fail termasuk Code.js
   dalam editor online — kalau fungsi sementara tu masih ada, ia HILANG bila push. Beritahu
   master untuk simpan/salin fungsi tu dulu kalau nak push semasa tengah guna teknik ni.
-- SETUP.md/.html §8.4 "Step 0" (fallback "run mana-mana fungsi awam") — teks tu **tersilap**,
-  ditulis sebelum gotcha dinamik ni ditemui. Perlu dibetulkan (belum dibuat — backlog).
+- ✅ **DIBETULKAN 2026-09-08**: SETUP.md/.html §8.4 fallback tu **tersilap** — arahan lama suruh
+  run mana-mana fungsi awam (cth `getSystemSettings`) untuk cetuskan skrin Allow, tapi sebab
+  kebenaran skop disemak DINAMIK (baris atas), fungsi yang tak sampai `UrlFetchApp` **tak
+  cetuskan apa-apa langsung**. Text baharu terangkan sebab + bagi cara betul (fungsi sementara
+  `AUTH_SEMENTARA_JANGAN_COMMIT`/`AUTH_TEMP_DO_NOT_COMMIT` terus dalam editor online) + amaran
+  mobile gagal senyap. Belum commit/push (tunggu master).
 
 ### Digest mingguan
 - `DGSENT_<minggu ISO>` dalam Script Properties — halang hantar dua kali seminggu sama. Untuk
@@ -109,9 +122,36 @@ tepat (senang tersasar).
   UI + docs (disahkan berulang kali semasa review, label mesti padan tepat merentas
   Index.html/SETUP.md/SETUP.html/docs).
 
+## Idea Feature (belum dirancang, tak commit bina)
+
+Brainstorm santai 2026-09-07 malam, master minta simpan dulu — **bukan pelan, sekadar senarai**:
+
+- **Uji Google Chat sebenar** — kos paling rendah, sink `sendToGoogleChat_` dah siap kod+ujian
+  unit, tinggal perlu satu Space sebenar untuk uji hujung-ke-hujung macam Telegram.
+- **Feed kalendar `.ics`/`webcal://` untuk ibu bapa** — subscribe sekali dalam Google/Apple
+  Calendar peribadi, auto-sync bila ada aktiviti baharu. Untuk ibu bapa yang tak aktif dalam
+  group Telegram/Chat.
+- **Import pukal cuti penggal/perayaan KPM** — admin tampal senarai tarikh rasmi KPM sekali gus
+  (bukan taip satu-satu), jimat masa mula tahun persekolahan.
+- **Laman awam baca-sahaja (tanpa log masuk)** — macam `docs/index.html` tapi papar aktiviti
+  SEBENAR automatik dari data sistem, untuk ibu bapa yang tak dalam Telegram/Chat langsung.
+
+## Klarifikasi ditanya master 2026-09-07 malam (jawapan dari kod, bukan andaian)
+
+- **Cuti Sekolah (admin key-in) SUDAH boleh dikongsi dalam digest** — checkbox "Kongsi ke
+  Telegram/Google Chat" wujud SAMA untuk semua kategori termasuk `cuti` (borang + backend tak ada
+  logik yang exclude kategori ni). Yang memang sengaja TAK masuk digest cuma cuti AM dari **Google**
+  (`getHolidayEvents_`, kalendar luar). Kalau cuti admin tak sampai ke group, punca paling mungkin:
+  checkbox tak ditanda semasa admin masuk entry tu (default OFF untuk semua kategori).
+- **Tetingkap digest ialah 7 hari BERGOLEK dari hari trigger** (`today` → `today+7`), **BUKAN**
+  sempadan tetap Ahad-Khamis (Kumpulan A) atau Isnin-Jumaat (Kumpulan B). Hari trigger sendiri
+  boleh admin tukar (`DIGEST_DAY` dalam System Settings, lalai Ahad) — sekolah Kumpulan B tukar
+  ke Isnin supaya "minggu ini" dalam mesej terasa betul; kandungan aktiviti automatik neutral
+  kepada kumpulan mana pun sebab tetingkapnya 7 hari kalendar PENUH.
+
 ## Minor Diketahui (backlog, tak menghalang guna)
 
-- SETUP.md/.html §8.4 "Step 0" perlu dibetulkan (lihat gotcha OAuth di atas).
+- ✅ SETUP.md/.html §8.4 "Step 0" dibetulkan 2026-09-08 (lihat gotcha OAuth di atas).
 - `sendToTelegram_`/`sendToGoogleChat_` — 2 daripada 3 gerbang `addAudit_` setiap sink (migrate +
   HTTP-gagal) betul dalam kod tapi tak ada ujian mutation SENDIRI (cuma gerbang rangkaian yang
   dibuktikan). Kos vs faedah kecil untuk tambah lagi.
