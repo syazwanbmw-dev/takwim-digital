@@ -275,11 +275,20 @@ function sliceBody(src, startMarker, endMarker) {
   ok('dropdown hari guna nama Melayu bermula Ahad',
      /Ahad/.test(render) && /Sabtu/.test(render));
 
+  ok('settings ada checklist cuti Google (checkbox class holidayChk, bukan kotak teks)',
+     /id="setHolidayList"/.test(render) && /class="holidayChk"/.test(render));
+  ok('label checklist cuti TIDAK guna istilah "digest" mentah (cikgu mungkin tak faham)',
+     !/CUTI[^<]*DIGEST/i.test(stripComments(render).replace(/\s+/g, ' ')));
+  ok('checklist cuti terangkan APA yang berlaku (hantar ke Telegram/Google Chat) bukan sekadar label',
+     /disertakan[^<]*Telegram\/Google Chat/.test(render) || /hantar[^<]*Telegram\/Google Chat/.test(render));
+
   ok('saveSettingsUI hantar lapan medan broadcast/digest',
      /broadcastTgToken\s*:/.test(save) && /clearTgToken\s*:/.test(save) &&
      /broadcastTgChatIds\s*:/.test(save) && /broadcastGchatWebhooks\s*:/.test(save) &&
      /clearGchatWebhooks\s*:/.test(save) && /digestDay\s*:/.test(save) &&
      /digestHour\s*:/.test(save) && /digestMinute\s*:/.test(save));
+  ok('saveSettingsUI hantar digestSharedHolidays dari checkbox YANG DITANDA sahaja (:checked)',
+     /digestSharedHolidays\s*:/.test(save) && /\.holidayChk:checked/.test(save));
   ok('saveSettingsUI hantar digestDay/Hour/Minute sebagai NOMBOR (parseInt)',
      /digestDay\s*:\s*parseInt\(/.test(save) && /digestHour\s*:\s*parseInt\(/.test(save) &&
      /digestMinute\s*:\s*parseInt\(/.test(save));
@@ -569,6 +578,11 @@ function fakeLockGagalSekali() {
 
 // --- orkestrasi sendWeeklyDigest_ -------------------------------------------
 // Membina "dunia" lengkap: config, kalendar, Properties, UrlFetchApp -- semua palsu.
+// HOLIDAY_CALENDAR_ID ditarik terus dari Code.js (bukan disalin sebagai literal ke
+// sini) -- kalau ID tu berubah suatu hari, mock ni ikut serta secara automatik
+// dan tidak diam-diam salah padan ke cabang kalendar KERJA.
+const HOLIDAY_CALENDAR_ID_UJI = loadCode(['HOLIDAY_CALENDAR_ID']).HOLIDAY_CALENDAR_ID;
+
 function duniaDigest(opsi) {
   opsi = opsi || {};
   const cfg = Object.assign(JSON.parse(CFG_UJI), opsi.cfg || {
@@ -589,12 +603,18 @@ function duniaDigest(opsi) {
     { id: 'e4', title: 'Mesyuarat Panitia SULIT', description: 'PIC: Siti\n[PPD_CATEGORY:mesyuarat]',
       location: 'Bilik Guru', start: esok(5), end: esok(5, 11), allDay: false }
   ]).map(fakeEvent);
+  // Lalai []: ujian sedia ada (tak pass holidayEvents) tak berubah tingkah laku --
+  // getHolidayEvents_ pulang senarai kosong, DIGEST_SHARED_HOLIDAYS kosong (CFG_UJI),
+  // jadi cutiDikongsi sentiasa [] melainkan ujian ni sengaja isi dua-dua.
+  const holidayEvents = (opsi.holidayEvents || []).map(fakeEvent);
   const api = loadCode(['sendWeeklyDigest_', 'pruneDigestMarkers_', 'isoWeekKey_'], {
     UrlFetchApp: fetch.api,
     PropertiesService: { getScriptProperties: function () { return props.api; } },
     CalendarApp: {
       EventColor: { BLUE: 'B', GREEN: 'G', ORANGE: 'O', MAUVE: 'M', RED: 'R', GRAY: 'GY', YELLOW: 'Y' },
-      getCalendarById: function () { return fakeCalendar(events); }
+      getCalendarById: function (id) {
+        return fakeCalendar(id === HOLIDAY_CALENDAR_ID_UJI ? holidayEvents : events);
+      }
     }
   });
   return { api: api, props: props, fetch: fetch };
@@ -686,6 +706,85 @@ function kunciMingguIni(api) {
   ok('saluran bertanda BELUM dikonfig -> TIADA fetch langsung', d.fetch.calls.length === 0);
   ok('saluran bertanda BELUM dikonfig -> penanda DGSENT_ TIDAK dibakar (minggu masih boleh keluar)',
      d.props.store[kunciMingguIni(d.api)] === undefined);
+})();
+
+// --- cuti Google dikongsi (checklist System Settings, spec 2026-09-08) ------
+(function ujianDigestCutiGoogleDitanda() {
+  const esok = function (n) { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n); x.setHours(9); return x; };
+  const d = duniaDigest({
+    cfg: { BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: HOOK_UJI,
+           DIGEST_SHARED_HOLIDAYS: 'Hari Raya Puasa' },
+    events: [], // fokus cuti sahaja -- tiada aktiviti guru minggu ni
+    holidayEvents: [
+      { id: 'h1', title: 'Hari Raya Puasa', start: esok(2), end: esok(3), allDay: true },
+      { id: 'h2', title: 'Deepavali', start: esok(4), end: esok(4), allDay: true } // TAK ditanda
+    ]
+  });
+  d.api.sendWeeklyDigest_();
+  ok('cuti Google ditanda cukup untuk cetuskan KEDUA-DUA sink walau tiada aktiviti guru',
+     d.fetch.calls.length === 2);
+  const teksTg = JSON.parse(d.fetch.calls.filter(function (c) { return c.url.indexOf('api.telegram.org') !== -1; })[0].params.payload).text;
+  const teksGc = JSON.parse(d.fetch.calls.filter(function (c) { return c.url.indexOf('chat.googleapis.com') !== -1; })[0].params.payload).text;
+  ok('cuti Google DITANDA masuk KEDUA-DUA saluran sekaligus (bukan pilih satu macam aktiviti guru)',
+     teksTg.indexOf('Hari Raya Puasa') !== -1 && teksGc.indexOf('Hari Raya Puasa') !== -1);
+  ok('cuti Google yang TAK ditanda TIDAK masuk mana-mana saluran',
+     teksTg.indexOf('Deepavali') === -1 && teksGc.indexOf('Deepavali') === -1);
+})();
+
+(function ujianDigestCutiGooglePadananExact() {
+  // Padanan mesti EXACT -- checklist Settings dah bagi nama tepat, padanan longgar
+  // buka semula kelas bug "sesuatu tersiar walau tak ditanda".
+  const esok = function (n) { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n); x.setHours(9); return x; };
+  const d = duniaDigest({
+    cfg: { BROADCAST_TG_TOKEN: TOKEN_UJI, BROADCAST_TG_CHAT_IDS: '-100123', BROADCAST_GCHAT_WEBHOOKS: HOOK_UJI,
+           DIGEST_SHARED_HOLIDAYS: 'Hari Raya Puasa' },
+    events: [],
+    holidayEvents: [
+      { id: 'h3', title: 'Hari Raya Puasa (First day)', start: esok(2), end: esok(2), allDay: true }
+    ]
+  });
+  d.api.sendWeeklyDigest_();
+  ok('padanan EXACT -- "Hari Raya Puasa" TAK padan "Hari Raya Puasa (First day)", tiada dihantar',
+     d.fetch.calls.length === 0);
+})();
+
+(function ujianDigestCutiGoogleLalaiTiadaTandaan() {
+  // DIGEST_SHARED_HOLIDAYS kosong (lalai DEFAULT_CONFIG) -- cuti Google KEKAL tak
+  // dikongsi, sama macam tingkah laku SEBELUM ciri ni wujud. Regresi pelancaran ciri.
+  const esok = function (n) { const x = new Date(); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() + n); x.setHours(9); return x; };
+  const d = duniaDigest({
+    events: [],
+    holidayEvents: [{ id: 'h4', title: 'Hari Raya Puasa', start: esok(2), end: esok(2), allDay: true }]
+  });
+  d.api.sendWeeklyDigest_();
+  ok('DIGEST_SHARED_HOLIDAYS kosong (lalai) -> tiada cuti Google dihantar, tingkah laku sebelum ciri ni tak berubah',
+     d.fetch.calls.length === 0);
+})();
+
+(function ujianGetUpcomingHolidayTitles() {
+  // fakeCalendar.getEvents() dalam harness ni ABAIKAN parameter start/end (pulang
+  // SEMUA senarai diberi -- lihat fakeCalendar()), jadi pagar tetingkap 13 bulan
+  // sebenarnya dikuatkuasakan oleh Google Calendar API SEBENAR, bukan diuji di sini.
+  // Fokus ujian ni: DEDUP nama untuk checklist Settings.
+  const events = [
+    { id: 'h1', title: 'Deepavali', start: new Date(2027, 9, 20), end: new Date(2027, 9, 20), allDay: true },
+    { id: 'h2', title: 'Deepavali', start: new Date(2028, 9, 8), end: new Date(2028, 9, 8), allDay: true },
+    { id: 'h3', title: 'Hari Raya Puasa (First day)', start: new Date(2027, 2, 20), end: new Date(2027, 2, 20), allDay: true }
+  ].map(fakeEvent);
+  const CAL_EVENT_COLOR = { BLUE: 'B', GREEN: 'G', ORANGE: 'O', MAUVE: 'M', RED: 'R', GRAY: 'GY', YELLOW: 'Y' };
+  const api = loadCode(['getUpcomingHolidayTitles_'], {
+    CalendarApp: { EventColor: CAL_EVENT_COLOR, getCalendarById: function (id) { return id === HOLIDAY_CALENDAR_ID_UJI ? fakeCalendar(events) : null; } }
+  });
+  const out = api.getUpcomingHolidayTitles_();
+  ok('getUpcomingHolidayTitles_ gabung nama SAMA (kejadian berulang) jadi SATU entri checklist',
+     out.filter(function (t) { return t === 'Deepavali'; }).length === 1);
+  ok('getUpcomingHolidayTitles_ kekalkan nama BERBEZA berasingan',
+     out.indexOf('Hari Raya Puasa (First day)') !== -1);
+  ok('getUpcomingHolidayTitles_ pulangkan tepat 2 nama unik (bukan 3 kejadian mentah)',
+     out.length === 2);
+  ok('getUpcomingHolidayTitles_ kalendar tak boleh diakses -> [] (gagal-selamat, tak pecahkan Settings)',
+     loadCode(['getUpcomingHolidayTitles_'], { CalendarApp: { EventColor: CAL_EVENT_COLOR, getCalendarById: function () { return null; } } })
+       .getUpcomingHolidayTitles_().length === 0);
 })();
 
 (function ujianDigestMingguKosong() {

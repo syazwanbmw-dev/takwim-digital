@@ -488,6 +488,16 @@ function renderSettings(){
           <div class="field"><label>JAM DIGEST</label><select id="setDigestHour">${Array.from({length:24},(_,h)=>`<option value="${h}" ${Number(s.digestHour)===h?'selected':''}>${String(h).padStart(2,'0')}</option>`).join('')}</select></div>
           <div class="field"><label>MINIT DIGEST</label><select id="setDigestMinute">${[0,15,30,45].map(m=>`<option value="${m}" ${Number(s.digestMinute)===m?'selected':''}>${String(m).padStart(2,'0')}</option>`).join('')}</select></div>
         </div><div class="eventSub">Apps Script menghantar dalam tetingkap lebih kurang ±15 minit dari waktu ini.</div></div>
+        <div class="field wide"><label>CUTI RASMI UNTUK DIKONGSI</label><div class="eventSub">Tandakan cuti yang ibu bapa/murid patut diingatkan. Cuti yang ditanda akan disertakan dalam senarai aktiviti yang sistem hantar ke Telegram/Google Chat setiap minggu.</div>
+          <div id="setHolidayList" style="display:flex;flex-direction:column;gap:6px;margin-top:8px;max-height:220px;overflow-y:auto;padding:10px;border:1px solid var(--line);border-radius:10px">${
+            (()=>{
+              const opsyen=s.holidayOptions||[];
+              if(!opsyen.length) return '<span class="eventSub">Tiada cuti Google dikesan dalam ~13 bulan akan datang.</span>';
+              const dipilih=new Set((s.digestSharedHolidays||'').split('|').filter(Boolean));
+              return opsyen.map(t=>`<label style="font-weight:normal;font-size:14px;letter-spacing:normal;color:#1e293b;display:flex;align-items:center;gap:7px"><input type="checkbox" class="holidayChk" value="${attr(t)}" ${dipilih.has(t)?'checked':''}>${esc(t)}</label>`).join('');
+            })()
+          }</div>
+        </div>
         <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
         <div class="field wide"><label>IKON (URL GAMBAR)</label><input id="setIconUrl" value="${attr(s.iconUrl||'')}" placeholder="https://.../logo.png — kosongkan untuk guna emoji 🏛️"><div class="eventSub">Direct link ke fail gambar (PNG/SVG/JPG). Mesti bermula https://</div></div>
@@ -509,7 +519,8 @@ function saveSettingsUI(btn){
     clearGchatWebhooks:setClearGchat.checked,
     digestDay:parseInt(setDigestDay.value,10),
     digestHour:parseInt(setDigestHour.value,10),
-    digestMinute:parseInt(setDigestMinute.value,10)
+    digestMinute:parseInt(setDigestMinute.value,10),
+    digestSharedHolidays:Array.from(document.querySelectorAll('.holidayChk:checked')).map(el=>el.value).join('|')
   };
   const unlock=lockBtn(btn,'Menyimpan…');
   gs('updateSystemSettings',[TOKEN,p],r=>{

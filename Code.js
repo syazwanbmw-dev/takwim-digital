@@ -38,7 +38,13 @@ const DEFAULT_CONFIG = {
   // nearMinute() Apps Script = tetingkap +-15 minit, bukan masa TEPAT.
   DIGEST_DAY: 0,
   DIGEST_HOUR: 7,
-  DIGEST_MINUTE: 45
+  DIGEST_MINUTE: 45,
+  // Nama cuti Google Malaysia (getHolidayEvents_) yang admin tanda untuk turut
+  // disertakan dalam digest mingguan -- dipisah '|' (BUKAN koma: nama macam "Hari
+  // Raya Puasa" ada ruang, parseCsvList_ akan pecahkannya). Nama datang dari
+  // checklist System Settings yang tarik terus dari Google (getUpcomingHolidayTitles_),
+  // BUKAN cikgu menaip -- padanan kekal EXACT, tiada risiko "taip salah, senyap".
+  DIGEST_SHARED_HOLIDAYS: ''
 };
 
 // Pagar keselamatan Google Chat: hos DIKUNCI ke chat.googleapis.com.
@@ -109,7 +115,12 @@ function validateSetupInput_(input) {
     BROADCAST_GCHAT_WEBHOOKS: parseCsvList_(input.broadcastGchatWebhooks).slice(0, 10).join(','),
     DIGEST_DAY: clampDigestDay_(input.digestDay !== undefined ? input.digestDay : DEFAULT_CONFIG.DIGEST_DAY),
     DIGEST_HOUR: clampDigestHour_(input.digestHour !== undefined ? input.digestHour : DEFAULT_CONFIG.DIGEST_HOUR),
-    DIGEST_MINUTE: clampMinute_(input.digestMinute !== undefined ? input.digestMinute : DEFAULT_CONFIG.DIGEST_MINUTE)
+    DIGEST_MINUTE: clampMinute_(input.digestMinute !== undefined ? input.digestMinute : DEFAULT_CONFIG.DIGEST_MINUTE),
+    // Had 40 (jauh lebih dari ~20 cuti rasmi setahun) + potong setiap nama ke 120
+    // aksara -- checklist Settings sahaja yang isi medan ni, tapi pagar tetap letak
+    // supaya satu blob sampah tak boleh membengkakkan APP_CONFIG_V3 tanpa had.
+    DIGEST_SHARED_HOLIDAYS: parseHolidayTitleList_(input.digestSharedHolidays).slice(0, 40)
+      .map(function (t) { return t.slice(0, 120); }).join('|')
   };
 
   if (!cfg.APP_NAME || !cfg.OFFICE_NAME || !cfg.SHORT_NAME || !cfg.CALENDAR_ID || !cfg.ADMIN_EMAIL) {
@@ -191,7 +202,10 @@ function projectSystemSettings_(cfg) {
     broadcastGchatCount: parseCsvList_(cfg.BROADCAST_GCHAT_WEBHOOKS).length,
     digestDay: cfg.DIGEST_DAY,
     digestHour: cfg.DIGEST_HOUR,
-    digestMinute: cfg.DIGEST_MINUTE
+    digestMinute: cfg.DIGEST_MINUTE,
+    // BUKAN rahsia (cuma nama cuti awam) -- perlu dipulangkan supaya checklist
+    // Settings boleh papar semula tanda ✓ yang admin dah pilih sebelum ni.
+    digestSharedHolidays: cfg.DIGEST_SHARED_HOLIDAYS
   };
 }
 
@@ -222,7 +236,11 @@ function mergeSettingsInput_(input, current) {
     broadcastTgChatIds: input.broadcastTgChatIds !== undefined ? input.broadcastTgChatIds : current.BROADCAST_TG_CHAT_IDS,
     digestDay: input.digestDay !== undefined ? input.digestDay : current.DIGEST_DAY,
     digestHour: input.digestHour !== undefined ? input.digestHour : current.DIGEST_HOUR,
-    digestMinute: input.digestMinute !== undefined ? input.digestMinute : current.DIGEST_MINUTE
+    digestMinute: input.digestMinute !== undefined ? input.digestMinute : current.DIGEST_MINUTE,
+    // BUKAN rahsia (macam chat_id) -- checklist Settings SENTIASA hantar senarai
+    // penuh yang ditanda semasa simpan, jadi kosong di sini bermakna admin memang
+    // nyahtanda semua, bukan "jangan ubah" (beza dgn token/webhook rahsia di atas).
+    digestSharedHolidays: input.digestSharedHolidays !== undefined ? input.digestSharedHolidays : current.DIGEST_SHARED_HOLIDAYS
   };
 }
 
@@ -297,7 +315,12 @@ function installSystem(input) {
 
 function getSystemSettings(token) {
   requireSession_(token, 'canManageUsers');
-  return projectSystemSettings_(getConfig_());
+  const out = projectSystemSettings_(getConfig_());
+  // Panggilan LUAR (CalendarApp) sengaja diasingkan dari projectSystemSettings_ --
+  // fungsi tu kekal PURE (cfg masuk, objek keluar, tiada side-effect) supaya boleh
+  // diuji tanpa sesi/CalendarApp palsu. holidayOptions ditambah di SINI sahaja.
+  out.holidayOptions = getUpcomingHolidayTitles_();
+  return out;
 }
 
 function updateSystemSettings(token, input) {
@@ -1292,6 +1315,24 @@ function holidayToObject_(event) {
   };
 }
 
+// Nama UNIK cuti Google dalam ~13 bulan akan datang, untuk checklist "CUTI RASMI
+// UNTUK DIKONGSI" dalam System Settings. 13 (bukan 12) bagi buffer supaya cuti
+// hujung tahun tak tercicir bila admin buka Settings lewat tahun. Sama fail-selamat
+// macam getHolidayEvents_ (calendar luar tak boleh akses -> senarai kosong, BUKAN
+// pecahkan skrin Settings).
+function getUpcomingHolidayTitles_() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 13);
+  const nampak = {};
+  const out = [];
+  getHolidayEvents_(start, end).forEach(function (e) {
+    if (!nampak[e.title]) { nampak[e.title] = true; out.push(e.title); }
+  });
+  return out;
+}
+
 function safeGetEvents_(calendar, start, end) {
   try { return calendar.getEvents(start, end); }
   catch (e) { throw new Error('Gagal membaca Calendar: ' + e.message); }
@@ -1822,6 +1863,17 @@ function parseCsvList_(raw) {
     .filter(function (v) { return v.length > 0; });
 }
 
+// Senarai NAMA cuti (cth "Hari Raya Puasa") -- TAK boleh kongsi parseCsvList_
+// sebab nama-nama ni ada RUANG dalamnya, dan parseCsvList_ pecah pada ruang juga.
+// Pisah '|' SAHAJA. Checklist Settings yang hantar nilai ni (bukan cikgu menaip),
+// jadi tiada keperluan padanan longgar/fuzzy di sini.
+function parseHolidayTitleList_(raw) {
+  return String(raw || '')
+    .split('|')
+    .map(function (t) { return t.trim(); })
+    .filter(function (t) { return t.length > 0; });
+}
+
 // Saluran keluar yang DIKENALI. Susunan dalam array ni ialah susunan KANONIK
 // baris `Kongsi:` -- satu aktiviti sentiasa menghasilkan satu bentuk teks yang sama,
 // tak kira susunan guru menanda checkbox.
@@ -2115,14 +2167,29 @@ function sendWeeklyDigest_() {
     const rangeEnd = new Date(today);
     rangeEnd.setDate(rangeEnd.getDate() + 7);
 
-    // Kalendar KERJA sahaja. Cuti Google (getHolidayEvents_) sengaja tidak digabung:
-    // ia kalendar luar yang tak boleh ditanda "Kongsi", dan ibu bapa sudah tahu cuti am.
+    // Kalendar KERJA. Cuti Google (getHolidayEvents_) kalendar LUAR yang tak boleh
+    // ditanda "Kongsi" macam aktiviti biasa -- ibu bapa memang sudah tahu cuti am
+    // secara am, itu sebab ia tak automatik masuk. Tapi admin BOLEH pilih SEBAHAGIAN
+    // (cth Hari Raya, bukan semua) via checklist System Settings (spec 2026-09-08) --
+    // senarai nama tu disimpan cfg.DIGEST_SHARED_HOLIDAYS.
     const events = safeGetEvents_(getPPDCalendar_(), today, rangeEnd).map(eventToObject_);
 
+    // Padanan EXACT (bukan substring/fuzzy): checklist Settings tarik nama SEBENAR
+    // terus dari Google (getUpcomingHolidayTitles_), admin tak pernah menaip nama
+    // tangan -- jadi padanan longgar cuma buka semula risiko "kongsi benda yang
+    // tak ditanda" tanpa faedah. Cuti yang dipadan disertakan dlm KEDUA-DUA saluran
+    // sekaligus: ia readonly, tiada checkbox Kongsi per-saluran macam aktiviti guru.
+    const dipilihCuti = {};
+    parseHolidayTitleList_(cfg.DIGEST_SHARED_HOLIDAYS).forEach(function (t) { dipilihCuti[t] = true; });
+    const cutiDikongsi = getHolidayEvents_(today, rangeEnd)
+      .filter(function (h) { return dipilihCuti[h.title] === true; });
+
     // Setiap sink tapis senarainya SENDIRI: guru boleh tanda satu saluran sahaja,
-    // jadi kandungan dua digest ini memang boleh berbeza.
-    const tgEvents = events.filter(function (e) { return e.shareChannels.indexOf('tg') !== -1; });
-    const gchatEvents = events.filter(function (e) { return e.shareChannels.indexOf('gchat') !== -1; });
+    // jadi kandungan dua digest ini memang boleh berbeza. Cuti dipilih dicantum
+    // SELEPAS tapisan -- buildDigestText_ susun semula ikut tarikh, jadi kedudukan
+    // cantuman tak penting.
+    const tgEvents = events.filter(function (e) { return e.shareChannels.indexOf('tg') !== -1; }).concat(cutiDikongsi);
+    const gchatEvents = events.filter(function (e) { return e.shareChannels.indexOf('gchat') !== -1; }).concat(cutiDikongsi);
 
     // Pagar ini bertanya "ada apa-apa yang AKAN dihantar?", bukan sekadar "ada aktiviti
     // bertanda?" -- dua soalan berbeza. Contoh: Telegram sudah dikonfig, Chat belum, dan
@@ -2580,6 +2647,34 @@ function selfTestDigestHelpers_() {
      gab6.digestMinute === cfgPenuh.DIGEST_MINUTE);
   ok('mergeSettingsInput_ digestDay=0 (Ahad) TIDAK dianggap kosong',
      mergeSettingsInput_({ digestDay: 0 }, Object.assign({}, cfgPenuh, { DIGEST_DAY: 3 })).digestDay === 0);
+
+  // --- cuti Google dikongsi (checklist System Settings, spec 2026-09-08) ---
+  ok('parseHolidayTitleList_ pisah "|" DAN kekalkan ruang dalam nama (bukan parseCsvList_)',
+     eq(parseHolidayTitleList_('Hari Raya Puasa|Deepavali'), ['Hari Raya Puasa', 'Deepavali']));
+  ok('parseHolidayTitleList_ potong ruang tepi + buang entri kosong',
+     eq(parseHolidayTitleList_('  Wesak Day  ||Christmas Day| '), ['Wesak Day', 'Christmas Day']));
+  ok('parseHolidayTitleList_ kosong/null -> []',
+     eq(parseHolidayTitleList_(''), []) && eq(parseHolidayTitleList_(null), []));
+
+  ok('validateSetupInput_ simpan senarai cuti dipisah "|", ruang tepi dipotong',
+     validateSetupInput_(inputAsas({ digestSharedHolidays: ' Hari Raya Puasa | Deepavali ' }))
+       .DIGEST_SHARED_HOLIDAYS === 'Hari Raya Puasa|Deepavali');
+  ok('validateSetupInput_ tiada input cuti -> lalai kosong (tak meletup)',
+     validateSetupInput_(inputAsas()).DIGEST_SHARED_HOLIDAYS === '');
+  ok('validateSetupInput_ hadkan senarai cuti ke 40 entri',
+     validateSetupInput_(inputAsas({ digestSharedHolidays: Array.from({ length: 50 }, function (_, i) { return 'Cuti' + i; }).join('|') }))
+       .DIGEST_SHARED_HOLIDAYS.split('|').length === 40);
+
+  ok('projectSystemSettings_ dedahkan digestSharedHolidays (bukan rahsia, checklist perlu papar semula tanda)',
+     projectSystemSettings_(Object.assign({}, cfgPenuh, { DIGEST_SHARED_HOLIDAYS: 'Hari Raya Puasa|Deepavali' }))
+       .digestSharedHolidays === 'Hari Raya Puasa|Deepavali');
+
+  const gab7 = mergeSettingsInput_({}, Object.assign({}, cfgPenuh, { DIGEST_SHARED_HOLIDAYS: 'Hari Raya Puasa' }));
+  ok('mergeSettingsInput_ tanpa medan cuti -> KEKALKAN senarai sedia ada',
+     gab7.digestSharedHolidays === 'Hari Raya Puasa');
+  const gab8 = mergeSettingsInput_({ digestSharedHolidays: '' }, Object.assign({}, cfgPenuh, { DIGEST_SHARED_HOLIDAYS: 'Hari Raya Puasa' }));
+  ok('mergeSettingsInput_ cuti KOSONG bermakna admin nyahtanda SEMUA (bukan "jangan ubah")',
+     gab8.digestSharedHolidays === '');
 
   const summary = results.join('\n');
   Logger.log(summary);
