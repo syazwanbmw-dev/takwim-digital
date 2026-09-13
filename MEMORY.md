@@ -3,9 +3,40 @@
 > Ingatan projek: status semasa, sejarah, keputusan master, gotcha. Baca lepas `CLAUDE.md`
 > (tiada `CLAUDE.md` lagi untuk projek ni — cipta bila perlu arahan operasi stabil).
 
-## Status Semasa (2026-09-07 malam)
+## Status Semasa (2026-09-08)
 
-🟢 **LIVE production `@23`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
+🟢 **LIVE production `@24`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
+`master` == `origin/master` @ `b967e22`. Suite **100 LULUS, 0 GAGAL** (`node selftest-node.js`).
+
+**2026-09-08: Ciri "Cuti Google dikongsi ke digest"** — admin kini boleh pilih SEBAHAGIAN
+cuti awam Google (cth Hari Raya, bukan semua) untuk turut disiarkan dalam digest mingguan
+Telegram/Google Chat. Sebelum ni cuti Google 100% tak masuk digest (readonly, kalendar
+luar, tiada checkbox Kongsi macam aktiviti guru).
+- Brainstorm bersama master (bounded path): mula-mula dicadang kotak TEKS (senarai nama
+  dipisah koma), master tolak sebab risiko cikgu taip salah = sistem senyap tak padan
+  (kelas bug "sifar palsu"). Tukar jadi **checklist** — nama cuti ditarik TERUS dari Google
+  (`getUpcomingHolidayTitles_`, ~13 bulan akan datang), admin pilih dari senarai SEBENAR,
+  zero risiko typo. Padanan masa hantar (`sendWeeklyDigest_`) EXACT, bukan substring/fuzzy.
+- Master juga tegur label UI jangan guna istilah "digest" mentah (jargon) — label jadi
+  **"CUTI RASMI UNTUK DIKONGSI"** + subtext terangkan APA yang jadi ("...dihantar ke
+  Telegram/Google Chat setiap minggu") tanpa perlu pembaca dah faham perkataan "digest".
+- Simpanan `DIGEST_SHARED_HOLIDAYS` pipe-separated (BUKAN koma) — nama cuti ada RUANG,
+  `parseCsvList_` sedia ada akan pecahkannya; helper baharu `parseHolidayTitleList_`.
+- Cuti dipilih disertakan dlm KEDUA-DUA saluran (tg+gchat) sekaligus, tiada pilihan
+  per-saluran macam aktiviti guru (readonly, YAGNI — tak diminta).
+- Ujian: 13 baharu (87→100), 3 mutasi manual dibuktikan gigit (padanan longgar, dedup
+  dibuang, pemisah tersalah split-on-whitespace sampai CRASH ujian) & dipulih.
+- Alur: commit `b967e22` → push `@HEAD` untuk master test visual DULU → master lulus
+  eksplisit "Deploy production" → `create-deployment` → `@23`→`@24`, disahkan
+  `list-deployments`+`list-versions` DUA KALI.
+- ✅ **Master confirm test di production SEBENAR (`@24`, bukan `@HEAD`) — "dah test dan ok"**
+  (2026-09-08). Checklist + Simpan Tetapan disahkan jalan di URL sebenar guru. Tiada
+  tugasan terbuka untuk ciri ni.
+
+---
+
+## Status Sebelum Ini (2026-09-07 malam, arkib)
+
 `master` == `origin/master` @ `bc82cd5` (docs sahaja — lihat bawah; kod Apps Script kekal `@23`).
 
 **2026-09-07 malam:** Sesi tanya-jawab santai lepas launch. Satu perubahan dibuat —
@@ -62,6 +93,32 @@ baharu projek ni, langkah ni kena diulang** — lihat gotcha "Kebenaran OAuth" d
 tepat (senang tersasar).
 
 ## Gotcha
+
+### 🔎 SIASATAN 2026-09-13 — Digest Ahad pertama SELEPAS launch senyap tak hantar
+**Punca:** Testing production sebenar (7 Sept, Isnin) dan hari trigger sebenar (13 Sept, Ahad)
+**jatuh dalam MINGGU ISO YANG SAMA** (`isoWeekKey_` = Isnin–Ahad). Testing 7 Sept (14:39) bakar
+penanda `DGSENT_2026-W37`. Bila trigger SEBENAR jalan 13 Sept 7:19 pagi, ia jumpa 3 aktiviti nak
+dihantar, tapi terus nampak `DGSENT_2026-W37` dah wujud → keluar SENYAP sebelum sempat cuba
+`sendToTelegram_`/`sendToGoogleChat_` langsung. Bukan bug kod — reka bentuk sengaja elak hantar
+dua kali seminggu (spec 6) — cuma testing + go-live tak sepatutnya jatuh minggu ISO yang sama
+tanpa bersihkan penanda selepasnya (gotcha sedia ada di bawah ni memang dah sebut, terlepas
+diikut lepas testing 7 Sept).
+- **Cara sahkan tanpa teka:** Executions (durasi ~4s = sampai Calendar API tapi keluar sebelum
+  hantar, sebab tiada `DIGEST_SEND_FAILED` DAN tiada mesej sampai) → Script Properties nilai
+  `DGSENT_<minggu>` → tukar ms ke tarikh (`node -e "console.log(new Date(MS).toString())"`) →
+  banding dengan tarikh testing production lepas.
+- **⚠️ UI Script Properties (Project Settings) — delete guna ikon tong sampah TAK SEMESTINYA
+  tersimpan.** Cubaan pertama padam key dari UI, refresh (F5) berkali-kali, nilai lama KEKAL
+  — delete senyap gagal, tiada mesej ralat. **Jangan percaya UI ni untuk delete kritikal.**
+  Fix yang BERJAYA: padam terus dalam kod (`PropertiesService.getScriptProperties()
+  .deleteProperty('DGSENT_2026-W37')`) letak dalam fungsi sementara SEBELUM panggil
+  `sendWeeklyDigest_()`, run sekali gus — satu larian, tiada langkah UI berasingan yang boleh
+  gagal senyap.
+- **Executions log jenis "Editor" run guna deployment `Head`** (bukan `Version 24` yang live) —
+  Script Properties tetap SAMA merentas semua versi/deployment (global projek), jadi ini tak
+  jadi punca, tapi jangan terkeliru bila banding Deployment column.
+- Selepas fix (padam + hantar manual), minggu depan (`2026-W38`) jalan normal — tiada tindakan
+  lanjut diperlukan, key lama tak pernah diguna semula (minggu ISO sentiasa naik).
 
 ### Kebenaran OAuth (`UrlFetchApp`) — DINAMIK, bukan statik, dan MOBILE gagal senyap
 **Ini paling penting, makan ~1 jam nyahpepijat langsung dengan master 2026-09-07:**
