@@ -44,7 +44,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.hidden{display:
 .grid3{display:grid;grid-template-columns:1.2fr .8fr .62fr;gap:14px}.hero{background:radial-gradient(circle at 88% 15%,rgba(255,255,255,.12),transparent 18%),linear-gradient(135deg,#064aa9,#0b7bf3);color:#fff;border-radius:19px;padding:24px;min-height:310px;box-shadow:0 16px 38px rgba(9,91,194,.18)}.hero h2{font-size:27px;line-height:1.28;margin:18px 0 22px}.heroMeta{display:grid;gap:9px;font-size:14px}.heroDots{display:flex;gap:6px;margin-top:18px}.heroDot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.35);cursor:pointer;border:0;padding:0}.heroDot.active{background:#fff}#heroBody{transition:transform .28s ease,opacity .28s ease}
 .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow)}.cardHead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.cardHead h3{margin:0;font-size:18px}
 .quick{display:grid;gap:9px}.quick button{border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px 13px;text-align:left;font-weight:740}.quick button:hover{background:#f8fbff;border-color:#c8dcfa}
-.calToolbar{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}.calToolbar b{white-space:nowrap}.calToolbar button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-weight:750}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.dow{text-align:center;font-size:10px;color:var(--muted);font-weight:850;padding-bottom:3px}.day{min-height:44px;padding:6px;border-radius:10px;text-align:center;cursor:pointer;font-size:12px}.day:hover{background:#edf5ff}.day.activity{background:#e3f0ff}.day.holiday{background:#fff4d6}.day.today{background:var(--primary);color:#fff;font-weight:800}.blank{opacity:0;pointer-events:none}.dots{display:flex;justify-content:center;align-items:center;gap:2px;margin-top:4px}.dot{width:5px;height:5px;border-radius:50%}.moreDot{font-size:8px;font-weight:800;line-height:1;color:inherit;opacity:.75}.program{background:#1872e8}.mesyuarat{background:#18a467}.lawatan{background:#f07a24}.taklimat{background:#7d58d8}.deadline{background:#e34b50}.lain{background:#8995a6}.cuti{background:#dba617}
+.calToolbar{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}.calToolbar b{white-space:nowrap}.calToolbar button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 9px;font-weight:750}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;transition:opacity .15s}.monthGrid.loading{opacity:.35}.dow{text-align:center;font-size:10px;color:var(--muted);font-weight:850;padding-bottom:3px}.day{min-height:44px;padding:6px;border-radius:10px;text-align:center;cursor:pointer;font-size:12px}.day:hover{background:#edf5ff}.day.activity{background:#e3f0ff}.day.holiday{background:#fff4d6}.day.today{background:var(--primary);color:#fff;font-weight:800}.blank{opacity:0;pointer-events:none}.dots{display:flex;justify-content:center;align-items:center;gap:2px;margin-top:4px}.dot{width:5px;height:5px;border-radius:50%}.moreDot{font-size:8px;font-weight:800;line-height:1;color:inherit;opacity:.75}.program{background:#1872e8}.mesyuarat{background:#18a467}.lawatan{background:#f07a24}.taklimat{background:#7d58d8}.deadline{background:#e34b50}.lain{background:#8995a6}.cuti{background:#dba617}@keyframes slideInFromRight{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}@keyframes slideInFromLeft{from{transform:translateX(-18px);opacity:0}to{transform:translateX(0);opacity:1}}.monthGrid.slide-next{animation:slideInFromRight .2s ease-out}.monthGrid.slide-prev{animation:slideInFromLeft .2s ease-out}
 .lower{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:14px}.eventRow{padding:12px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:72px 1fr auto;gap:9px;cursor:pointer;align-items:start}.eventRow:first-child{border-top:0}.eventTitle{font-size:13px;font-weight:780;line-height:1.35}.eventSub{font-size:11px;color:var(--muted);margin-top:4px}
 .badge{font-size:10px;border-radius:999px;padding:5px 9px;background:#eef3fa;white-space:nowrap;font-weight:750}.badge.editor{background:#e5f7ef;color:#08774a}.badge.viewer{background:#edf1f6;color:#536174}.badge.admin{background:#e7efff;color:#2053a5}.badge.pending{background:#fff2d8;color:#9b6812}.badge.suspended{background:#ffe8e9;color:#b63339}.badge.rejected{background:#f1f1f1;color:#666}
 .list{display:grid;gap:11px}.bigEvent,.userRow,.auditRow{background:#fff;border:1px solid var(--line);border-radius:16px;padding:15px 16px;display:grid;gap:12px;align-items:center;box-shadow:var(--shadow-sm)}.bigEvent{grid-template-columns:110px 1fr auto}.userRow{grid-template-columns:1fr 170px auto}.auditRow{grid-template-columns:170px 1fr 1.5fr}.userRow:hover,.bigEvent:hover{border-color:#c7dafa}.actions{display:flex;gap:7px;flex-wrap:wrap}.actions select{border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:#fff}
@@ -332,6 +332,10 @@ let USER=null,PERMS=null,DATA=null,APP_CONFIG=null;
 let CAL={year:null,month:null,label:'',events:[]};
 let selectedEvent=null;
 let swipeStartX=0,swipeStartY=0;
+// Arah pertukaran bulan terakhir (1=next,-1=prev,0=tiada arah) -- renderCal() baca ni untuk
+// pilih animasi slide masuk yang padan arah swipe/butang. Reset 0 untuk goToday (bukan navigasi
+// berarah, jadi tiada slide).
+let CAL_DIR=0;
 
 document.addEventListener('DOMContentLoaded',()=>{
   bindNav();
@@ -733,7 +737,8 @@ function renderCal(id){
       :es.map(e=>`<i class="dot ${e.category}"></i>`).join('');
     cells+=`<div class="day ${dayCellClass(es)} ${today?'today':''}" onclick="openDate('${ds}')">${d}<div class="dots">${dotsHtml}</div></div>`;
   }
-  el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid">${cells}</div>`;
+  const dirClass=CAL_DIR>0?'slide-next':(CAL_DIR<0?'slide-prev':'');
+  el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid ${dirClass}">${cells}</div>`;
 }
 // Swipe kiri/kanan atas grid kalendar (dashCalendar + fullCalendar) panggil changeMonth sama
 // macam butang ‹/›. Delegate kat document (bukan attach terus kat .monthGrid) sebab renderCal()
@@ -751,8 +756,12 @@ function bindCalendarSwipe(){
     changeMonth(dx<0?1:-1);
   },{passive:true});
 }
-function changeMonth(delta){let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
-function goToday(){const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
+// Dim grid SERTA-MERTA (sebelum respons server sampai) supaya swipe/klik terasa diterima --
+// getMonthData buat 2 panggilan Calendar API berturutan (~2s), tanpa isyarat ni pengguna
+// tertanya sama ada gerakan dia jalan langsung.
+function dimCalendarGrids(){document.querySelectorAll('.monthGrid').forEach(g=>g.classList.add('loading'))}
+function changeMonth(delta){dimCalendarGrids();let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};CAL_DIR=delta;renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
+function goToday(){dimCalendarGrids();const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};CAL_DIR=0;renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
 function openDate(ds){gs('getEventsForDate',[TOKEN,ds],r=>{dateBox.innerHTML=`<div class="modalHead"><h3>${esc(r.label)}</h3><button class="close" onclick="closeModal('dateModal')">×</button></div>${r.events.length?eventRows(r.events):'<div class="empty">Tiada aktiviti.</div>'}<div class="modalActions">${PERMS.canCreate?`<button class="btn primary" onclick="closeModal('dateModal');openEventForm('${ds}')">+ Tambah Aktiviti</button>`:''}</div>`;dateModal.classList.add('show')})}
 
 function renderToday(){todayPage.innerHTML=`<h2>Aktiviti Hari Ini</h2>${bigList(DATA.todayEvents)}`}
@@ -959,7 +968,7 @@ function eventRows(es){return es.length?es.map(e=>`<div class="eventRow" onclick
 function bigList(es){return `<div class="list">${es.length?es.map(e=>`<div class="bigEvent" onclick='detailById(${j(e.id)})'><div>${dateRangeShort(e)}<div class="eventSub">${timeRange(e)}</div></div><div><b>${esc(e.title)}</b><div class="eventSub">${esc(e.location||'')}</div></div><span class="badge">${esc(e.categoryLabel)}</span></div>`).join(''):'<div class="empty">Tiada aktiviti.</div>'}</div>`}
 
 function searchUI(){const q=searchBox.value.trim();if(!q)return;showPage('searchPage');searchPage.innerHTML='<div class="empty">Mencari…</div>';gs('searchCalendarEvents',[TOKEN,q],r=>{searchPage.innerHTML=`<h2>Carian: ${esc(q)}</h2>${bigList(r)}`})}
-function refreshData(){gs('getDashboardData',[TOKEN],r=>{DATA=r;CAL={year:r.month.year,month:r.month.monthIndex,label:r.month.label,events:r.monthEvents};renderAll();toast('Data dikemaskini.')})}
+function refreshData(){gs('getDashboardData',[TOKEN],r=>{DATA=r;CAL={year:r.month.year,month:r.month.monthIndex,label:r.month.label,events:r.monthEvents};CAL_DIR=0;renderAll();toast('Data dikemaskini.')})}
 
 function bindNav(){document.querySelectorAll('.navbtn[data-page]').forEach(b=>b.addEventListener('click',()=>showPage(b.dataset.page)))}
 function showPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.navbtn').forEach(b=>b.classList.toggle('active',b.dataset.page===id));sidebar.classList.remove('open');if(id==='usersPage')renderUsers();if(id==='auditPage')renderAudit();if(id==='settingsPage')renderSettings()}
