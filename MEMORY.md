@@ -3,10 +3,35 @@
 > Ingatan projek: status semasa, sejarah, keputusan master, gotcha. Baca lepas `CLAUDE.md`
 > (tiada `CLAUDE.md` lagi untuk projek ni — cipta bila perlu arahan operasi stabil).
 
-## Status Semasa (2026-09-08)
+## Status Semasa (2026-09-20)
 
-🟢 **LIVE production `@24`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
-`master` == `origin/master` @ `b967e22`. Suite **100 LULUS, 0 GAGAL** (`node selftest-node.js`).
+🟢 **LIVE production `@25`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
+`master` == `origin/master` @ `6153dee`. Suite **100 LULUS, 0 GAGAL** (`node selftest-node.js`).
+Deployment ID guru KEKAL `AKfycbxEF2omj4UZF3jbykg6RCXuo7QFEVwqAsv-jYVOs01M-FMZhXU14M-5eG5Vb3F7SEybyg`
+(WAJIB `--deploymentId` pada setiap `clasp deploy`, kalau tidak URL guru bertukar — sama gotcha
+`opr-program`).
+
+**2026-09-20: Ciri "Swipe kalendar tukar bulan"** — kalendar (Dashboard preview + tab "Calendar
+Interaktif") kini boleh swipe kiri/kanan untuk tukar bulan, bukan cuma klik butang `‹`/`›`.
+- Delegated touch listener kat `document` (bukan attach terus kat `.monthGrid`) sebab
+  `renderCal()` tulis semula `innerHTML` tiap tukar bulan — listener terus akan hilang lepas
+  render. Ambang 50px + mendatar>menegak elak clash dengan scroll biasa.
+- `changeMonth(delta)` (fungsi sedia ada, sama dgn butang) dipanggil terus dari swipe — `CAL`
+  state dikongsi, jadi swipe kat mana-mana satu kalendar auto sync yang satu lagi.
+- **Animasi slide + isyarat loading ditambah lepas smoke master** (2 pusingan follow-up dalam
+  sesi sama): (1) grid baru fade+slide masuk (~0.2s) ikut arah (`CAL_DIR`) — next dari kanan,
+  prev dari kiri; (2) grid lama **pudar serta-merta** (`dimCalendarGrids()`, sebelum respons
+  server sampai) sebab `getMonthData` buat 2 panggilan Calendar API berturutan (~2 saat,
+  overhead SERVER, bukan client) — tanpa isyarat ni master rasa "swipe tak jalan ke ni" masa
+  smoke test. Puncanya disahkan baca kod (`safeGetEvents_` + `getHolidayEvents_` sequential),
+  BUKAN caching — caching CalendarAPI sengaja TAK disentuh (skop swipe, risiko kesegaran data
+  cuti/aktiviti perlu brainstorm berasingan kalau nak dikejar).
+- Testing: gerakan sentuh (`touchstart`/`touchend`) dalam DOM browser sebenar — `selftest-node.js`
+  (Node, tiada DOM) TAK boleh uji ni. Disahkan smoke manual master (jari sebenar) di `@HEAD`
+  sebelum deploy, 3 pusingan (swipe asas → animasi → loading feedback).
+- Fail disentuh: `Index.html` sahaja (client-side), tiada fail/library baharu.
+- Commit: `b3beb5a` (swipe asas), `6153dee` (animasi+loading). Deploy: `create-deployment` →
+  `@25` atas deploymentId sedia ada.
 
 **2026-09-08: Ciri "Cuti Google dikongsi ke digest"** — admin kini boleh pilih SEBAHAGIAN
 cuti awam Google (cth Hari Raya, bukan semua) untuk turut disiarkan dalam digest mingguan
@@ -183,8 +208,8 @@ diikut lepas testing 7 Sept).
 
 Brainstorm santai 2026-09-07 malam, master minta simpan dulu — **bukan pelan, sekadar senarai**:
 
-- **Uji Google Chat sebenar** — kos paling rendah, sink `sendToGoogleChat_` dah siap kod+ujian
-  unit, tinggal perlu satu Space sebenar untuk uji hujung-ke-hujung macam Telegram.
+- ✅ **Uji Google Chat sebenar** — SIAP, master sahkan berjaya hujung-ke-hujung (2026-09-20,
+  disebut semasa brainstorm feature swipe; tiada tarikh ujian sebenar direkod).
 - **Feed kalendar `.ics`/`webcal://` untuk ibu bapa** — subscribe sekali dalam Google/Apple
   Calendar peribadi, auto-sync bila ada aktiviti baharu. Untuk ibu bapa yang tak aktif dalam
   group Telegram/Chat.
