@@ -331,10 +331,12 @@ let TOKEN=localStorage.getItem('calendar_v3_token')||localStorage.getItem('ppd_v
 let USER=null,PERMS=null,DATA=null,APP_CONFIG=null;
 let CAL={year:null,month:null,label:'',events:[]};
 let selectedEvent=null;
+let swipeStartX=0,swipeStartY=0;
 
 document.addEventListener('DOMContentLoaded',()=>{
   bindNav();
   bindSetupPreview();
+  bindCalendarSwipe();
   gs('getBootstrapState',[],boot=>{
     APP_CONFIG=boot.config||{};
     applyBranding(APP_CONFIG);
@@ -732,6 +734,22 @@ function renderCal(id){
     cells+=`<div class="day ${dayCellClass(es)} ${today?'today':''}" onclick="openDate('${ds}')">${d}<div class="dots">${dotsHtml}</div></div>`;
   }
   el.innerHTML=`<div class="calToolbar"><button onclick="changeMonth(-1)">‹</button><b>${esc(CAL.label)}</b><div><button onclick="goToday()">Hari Ini</button> <button onclick="changeMonth(1)">›</button></div></div><div class="monthGrid">${cells}</div>`;
+}
+// Swipe kiri/kanan atas grid kalendar (dashCalendar + fullCalendar) panggil changeMonth sama
+// macam butang ‹/›. Delegate kat document (bukan attach terus kat .monthGrid) sebab renderCal()
+// tulis semula innerHTML tiap tukar bulan -- listener terus kat elemen akan hilang lepas render.
+function bindCalendarSwipe(){
+  document.addEventListener('touchstart',e=>{
+    if(!e.target.closest('.monthGrid'))return;
+    swipeStartX=e.touches[0].clientX;swipeStartY=e.touches[0].clientY;
+  },{passive:true});
+  document.addEventListener('touchend',e=>{
+    if(!e.target.closest('.monthGrid'))return;
+    const dx=e.changedTouches[0].clientX-swipeStartX,dy=e.changedTouches[0].clientY-swipeStartY;
+    // Ambang 50px + mendatar > menegak -- elak clash dengan scroll biasa jari menegak.
+    if(Math.abs(dx)<50||Math.abs(dx)<=Math.abs(dy))return;
+    changeMonth(dx<0?1:-1);
+  },{passive:true});
 }
 function changeMonth(delta){let y=CAL.year,m=CAL.month+delta;if(m<0){m=11;y--}if(m>11){m=0;y++}gs('getMonthData',[TOKEN,y,m],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
 function goToday(){const n=new Date();gs('getMonthData',[TOKEN,n.getFullYear(),n.getMonth()],r=>{CAL={year:r.year,month:r.monthIndex,label:r.label,events:r.events};renderCal('dashCalendar');renderCal('fullCalendar');renderCalMonthList()})}
