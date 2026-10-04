@@ -1052,6 +1052,9 @@ function kunciMingguIni(api) {
   // `.btn` sahaja TIADA warna (lihat CSS): tanpa primary/secondary/danger ia jadi kelabu lalai pelayar.
   ok('butang Hantar Sekarang ada kelas WARNA (btn secondary) -- bukan `btn` sahaja',
      /<button class="btn secondary"[^>]*onclick="sendDigestNowUI\(this\)"/.test(render));
+  // `--line` (#e5ebf3) hampir tak nampak atas kad putih: butang mesti ada garis BIRU sendiri.
+  ok('butang Hantar Sekarang ada garis biru sendiri (border --primary), bukan garis pucat lalai',
+     /<button class="btn secondary"[^>]*style="[^"]*border:\s*\d+px solid var\(--primary\)/.test(render));
   ok('label butang TIDAK guna istilah "digest" mentah (jargon, keputusan master 2026-09-08)',
      !/HANTAR SEKARANG[^<]*digest/i.test(render) && !/Hantar Sekarang ke[^<]*digest/i.test(render));
   ok('sendDigestNowUI WAJIB tanya pengesahan SEBELUM panggil server',
