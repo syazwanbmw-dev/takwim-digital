@@ -505,7 +505,7 @@ function renderSettings(){
           }</div>
         </div>
         <div class="field wide"><label>HANTAR SEKARANG</label><div class="eventSub">Hantar aktiviti 7 hari akan datang yang ditanda <b>Kongsi</b> ke Telegram / Google Chat sekarang juga, tanpa tunggu hari hantar mingguan. Ia guna tetapan yang <b>sudah disimpan</b> — tekan Simpan Tetapan dulu kalau baru ubah.</div>
-          <div style="margin-top:8px"><button class="btn" type="button" onclick="sendDigestNowUI(this)">Hantar Sekarang ke Telegram / Google Chat</button></div>
+          <div style="margin-top:8px"><button class="btn secondary" type="button" onclick="sendDigestNowUI(this)">Hantar Sekarang ke Telegram / Google Chat</button></div>
           <div id="digestNowStatus" class="eventSub" style="margin-top:8px;white-space:pre-line"></div>
         </div>
         <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
