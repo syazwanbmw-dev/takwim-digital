@@ -607,16 +607,31 @@ function duniaDigest(opsi) {
   // getHolidayEvents_ pulang senarai kosong, DIGEST_SHARED_HOLIDAYS kosong (CFG_UJI),
   // jadi cutiDikongsi sentiasa [] melainkan ujian ni sengaja isi dua-dua.
   const holidayEvents = (opsi.holidayEvents || []).map(fakeEvent);
-  const api = loadCode(['sendWeeklyDigest_', 'pruneDigestMarkers_', 'isoWeekKey_'], {
+  const overrides = {
     UrlFetchApp: fetch.api,
     PropertiesService: { getScriptProperties: function () { return props.api; } },
+    // computeDigest sebenar (SHA-256) supaya requireSession_/hashText_ jalan betul
+    // untuk sendDigestNow -- sesi palsu mesti dicari ikut cincang yang SAMA.
+    Utilities: {
+      formatDate: function (d) { return String(d); },
+      getUuid: function () { return 'uuid-palsu'; },
+      DigestAlgorithm: { SHA_256: 'SHA_256' }, Charset: { UTF_8: 'UTF_8' },
+      computeDigest: function (alg, text) {
+        return Array.from(require('crypto').createHash('sha256').update(String(text), 'utf8').digest())
+          .map(function (b) { return b > 127 ? b - 256 : b; });
+      }
+    },
     CalendarApp: {
       EventColor: { BLUE: 'B', GREEN: 'G', ORANGE: 'O', MAUVE: 'M', RED: 'R', GRAY: 'GY', YELLOW: 'Y' },
       getCalendarById: function (id) {
         return fakeCalendar(id === HOLIDAY_CALENDAR_ID_UJI ? holidayEvents : events);
       }
     }
-  });
+  };
+  // Hanya letak LockService bila ujian minta -- Object.assign dalam loadCode akan
+  // menimpa lalai dengan `undefined` kalau kunci ini sentiasa wujud.
+  if (opsi.lock) overrides.LockService = opsi.lock;
+  const api = loadCode(['sendWeeklyDigest_', 'runDigest_', 'sendDigestNow', 'pruneDigestMarkers_', 'isoWeekKey_'], overrides);
   return { api: api, props: props, fetch: fetch };
 }
 function kunciMingguIni(api) {
@@ -929,6 +944,123 @@ function kunciMingguIni(api) {
      tinggal.indexOf('DGSENT_2025-W52') === -1 && tinggal.indexOf('DGSENT_2026-W01') === -1 &&
      tinggal.indexOf('DGSENT_2026-W09') !== -1);
   ok('pruneDigestMarkers_ TIDAK sentuh kunci lain', props.store.APP_CONFIG_V3 !== undefined);
+})();
+
+// --- butang "Hantar Sekarang" (runDigest_(true) / sendDigestNow) ---------------
+(function ujianHantarSekarangTeras() {
+  // 1. Penanda minggu ini SUDAH ada: trigger mesti senyap, butang mesti tetap hantar.
+  const seed = function (d) { d.props.store[kunciMingguIni(d.api)] = '1'; };
+  const dT = duniaDigest(); seed(dT);
+  const rT = dT.api.runDigest_(false);
+  ok('trigger (manual=false) + penanda sedia ada -> sudah-dihantar, TIADA fetch',
+     rT.status === 'sudah-dihantar' && dT.fetch.calls.length === 0);
+
+  const dM = duniaDigest(); seed(dM);
+  const rM = dM.api.runDigest_(true);
+  ok('butang (manual=true) memintas penanda sedia ada -> HANTAR ke kedua-dua sink',
+     rM.status === 'dihantar' && dM.fetch.calls.length === 2);
+  ok('butang pulangkan bilangan berjaya + bilangan aktiviti per saluran',
+     rM.tgBerjaya === 1 && rM.gchatBerjaya === 1 && rM.tgBil === 2 && rM.gchatBil === 2);
+
+  // 2. Selepas butang berjaya, trigger minggu yang sama TIDAK boleh hantar kandungan sama lagi.
+  const d2 = duniaDigest();
+  d2.api.runDigest_(true);
+  const sebelum = d2.fetch.calls.length;
+  const rSusul = d2.api.runDigest_(false);
+  ok('butang berjaya TULIS penanda -> trigger selepasnya tidak hantar dua kali',
+     d2.props.store[kunciMingguIni(d2.api)] !== undefined &&
+     rSusul.status === 'sudah-dihantar' && d2.fetch.calls.length === sebelum);
+
+  // 3. Semua sasaran gagal: butang JANGAN bakar penanda (tiada apa sampai ke ibu bapa)...
+  const dG = duniaDigest({ responder: function () { return { code: 500, body: '{"ok":false}' }; } });
+  const rG = dG.api.runDigest_(true);
+  ok('butang + SEMUA sasaran gagal -> status gagal, penanda TIDAK dibakar',
+     rG.status === 'gagal' && dG.props.store[kunciMingguIni(dG.api)] === undefined);
+  // ...berpasangan: trigger kekal tingkah laku asal (snapshot) walau semua gagal.
+  const dGT = duniaDigest({ responder: function () { return { code: 500, body: '{"ok":false}' }; } });
+  dGT.api.runDigest_(false);
+  ok('trigger + SEMUA sasaran gagal -> penanda TETAP dibakar (tingkah laku asal tak berubah)',
+     dGT.props.store[kunciMingguIni(dGT.api)] !== undefined);
+})();
+
+(function ujianHantarSekarangStatus() {
+  const kosong = { BROADCAST_TG_TOKEN: '', BROADCAST_TG_CHAT_IDS: '', BROADCAST_GCHAT_WEBHOOKS: '' };
+  const d1 = duniaDigest({ cfg: kosong });
+  ok('tiada saluran dikonfig -> status tiada-saluran, TIADA fetch',
+     d1.api.runDigest_(true).status === 'tiada-saluran' && d1.fetch.calls.length === 0);
+
+  const d2 = duniaDigest({ events: [] });
+  const r2 = d2.api.runDigest_(true);
+  ok('tiada aktiviti bertanda -> status tiada-aktiviti, TIADA fetch, TIADA penanda',
+     r2.status === 'tiada-aktiviti' && d2.fetch.calls.length === 0 &&
+     d2.props.store[kunciMingguIni(d2.api)] === undefined);
+
+  const sibuk = { getScriptLock: function () { return { tryLock: function () { return false; }, releaseLock: function () {} }; } };
+  const d3 = duniaDigest({ lock: sibuk });
+  ok('kunci dipegang larian lain -> status sibuk (bukan senyap), TIADA fetch',
+     d3.api.runDigest_(true).status === 'sibuk' && d3.fetch.calls.length === 0);
+})();
+
+(function ujianSendDigestNowGerbangAdmin() {
+  const hash = function (t) { return require('crypto').createHash('sha256').update(t, 'utf8').digest('hex'); };
+  const sesi = function (email, token) {
+    const o = {};
+    o[hash(token)] = { email: email, createdAt: new Date().toISOString(), expiresAt: Date.now() + 3600 * 1000 };
+    return o;
+  };
+  const dunia = function (role) {
+    const users = {};
+    users['guru@sekolah.edu.my'] = { email: 'guru@sekolah.edu.my', name: 'Guru', status: 'approved', role: role };
+    return duniaDigest({ props: {
+      PPD_USERS_V23: JSON.stringify(users),
+      PPD_SESSIONS_V23: JSON.stringify(sesi('guru@sekolah.edu.my', 'tok-sah'))
+    } });
+  };
+  const cuba = function (d, token) { try { d.api.sendDigestNow(token); return null; } catch (e) { return e; } };
+
+  const dAdmin = dunia('admin');
+  const rAdmin = dAdmin.api.sendDigestNow('tok-sah');
+  ok('sendDigestNow admin sah -> HANTAR (2 fetch) + pulang status',
+     rAdmin.status === 'dihantar' && dAdmin.fetch.calls.length === 2);
+  const baris = auditRows(dAdmin.props).filter(function (r) { return r.action === 'DIGEST_MANUAL_SENT'; });
+  ok('sendDigestNow catat audit DIGEST_MANUAL_SENT atas emel admin yang menekan',
+     baris.length === 1 && baris[0].actor === 'guru@sekolah.edu.my');
+
+  const dEditor = dunia('editor');
+  ok('sendDigestNow EDITOR -> ditolak, TIADA fetch (gerbang canManageUsers)',
+     cuba(dEditor, 'tok-sah') !== null && dEditor.fetch.calls.length === 0);
+  const dViewer = dunia('viewer');
+  ok('sendDigestNow VIEWER -> ditolak, TIADA fetch',
+     cuba(dViewer, 'tok-sah') !== null && dViewer.fetch.calls.length === 0);
+
+  const dTanpa = dunia('admin');
+  ok('sendDigestNow tanpa token -> ditolak, TIADA fetch',
+     cuba(dTanpa, undefined) !== null && dTanpa.fetch.calls.length === 0);
+  const dPalsu = dunia('admin');
+  ok('sendDigestNow token TIDAK dikenali -> ditolak, TIADA fetch',
+     cuba(dPalsu, 'tok-palsu') !== null && dPalsu.fetch.calls.length === 0);
+})();
+
+(function ujianButangHantarSekarangUI() {
+  const html = fs.readFileSync(HTML_PATH, 'utf8');
+  const render = sliceBody(html, 'function renderSettings(){', '\nfunction saveSettingsUI');
+  const ui = sliceBody(html, 'function sendDigestNowUI(btn){', '\nfunction ');
+  const teks = sliceBody(html, 'function digestNowText(r){', '\nfunction ');
+
+  ok('settings ada butang yang memanggil sendDigestNowUI',
+     /onclick="sendDigestNowUI\(this\)"/.test(render) && /id="digestNowStatus"/.test(render));
+  ok('label butang TIDAK guna istilah "digest" mentah (jargon, keputusan master 2026-09-08)',
+     !/HANTAR SEKARANG[^<]*digest/i.test(render) && !/Hantar Sekarang ke[^<]*digest/i.test(render));
+  ok('sendDigestNowUI WAJIB tanya pengesahan SEBELUM panggil server',
+     /if\(!confirm\(/.test(ui) && ui.indexOf('confirm(') < ui.indexOf("gs('sendDigestNow'"));
+  ok('sendDigestNowUI hantar TOKEN sesi (bukan tanpa token)',
+     /gs\('sendDigestNow',\[TOKEN\]/.test(ui));
+  ok('sendDigestNowUI nyahkunci butang pada KEDUA-DUA success dan failure (elak butang mati / dua kali tekan)',
+     /lockBtn\(btn,/.test(ui) && /r=>\{unlock\(\)/.test(ui) && /e=>\{unlock\(\)/.test(ui));
+  ok('digestNowText ada mesej SENDIRI untuk setiap status (tiada senyap)',
+     ['dihantar', 'gagal', 'tiada-aktiviti', 'tiada-saluran', 'sibuk'].every(function (s) { return teks.indexOf("'" + s + "'") !== -1; }));
+  ok('hasil server dipapar guna textContent (bukan innerHTML)',
+     /status\.textContent=digestNowText\(r\)/.test(ui) && ui.indexOf('innerHTML') === -1);
 })();
 
 // ---- laporan ------------------------------------------------------------

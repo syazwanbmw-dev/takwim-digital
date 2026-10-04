@@ -2130,6 +2130,35 @@ function sendToGoogleChat_(text, webhooksCsv) {
 // untuk memberi kebenaran "sambung ke perkhidmatan luar" (UrlFetchApp). Tanpa itu,
 // eksekusi trigger gagal SENYAP.
 function sendWeeklyDigest_() {
+  runDigest_(false);
+}
+
+// Butang "Hantar Sekarang" di System Settings. Admin sahaja -- disemak SERVER-SIDE
+// sebab google.script.run boleh dipanggil terus dari console pelayar.
+// Beza dengan trigger: TIDAK dihalang penanda DGSENT_ (admin sengaja mahu hantar
+// walau minggu ni sudah ada penanda), dan memulangkan KEPUTUSAN kepada UI -- trigger
+// boleh keluar senyap, tapi butang yang senyap nampak macam rosak.
+function sendDigestNow(token) {
+  const admin = requireSession_(token, 'canManageUsers');
+  const r = runDigest_(true);
+  // Audit TIDAK boleh menukar digest yang SUDAH terhantar jadi ralat di skrin: admin
+  // akan klik semula dan group menerima mesej dua kali. Pagar bisu.
+  if (r.status === 'dihantar' || r.status === 'gagal') {
+    try {
+      addAudit_('DIGEST_MANUAL_SENT',
+                r.status + ' | tg ' + r.tgBerjaya + ' | gchat ' + r.gchatBerjaya, admin.user.email);
+    } catch (e) { /* sengaja senyap */ }
+  }
+  return r;
+}
+
+// Teras digest, dikongsi trigger (manual=false) dan butang (manual=true) supaya
+// tapisan saluran/cuti/penanda tak wujud dalam DUA versi. TIDAK pernah throw --
+// handler trigger jalan tanpa sesi, tiada siapa nampak ralat kalau ia meletup.
+// Pulangkan { status, tgBerjaya, gchatBerjaya, tgBil, gchatBil } -- trigger abaikan,
+// butang paparkan. status: sibuk | tiada-saluran | tiada-aktiviti | sudah-dihantar |
+// dihantar | gagal | ralat.
+function runDigest_(manual) {
   // GAS ada quirk jarang (tapi didokumentasikan) di mana SATU trigger masa boleh
   // tercetus DUA kali serentak. Tanpa kunci, dua larian sama-sama boleh lepasi
   // semakan penanda DGSENT_ di bawah SEBELUM mana-mana sempat menulisnya -- hasilnya
@@ -2139,9 +2168,8 @@ function sendWeeklyDigest_() {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) {
     // Larian lain sedang pegang kunci ni -- ia sama ada tengah jalan atau baru siap.
-    // Tiada apa produktif untuk larian ni buat; keluar SENYAP (jangan throw -- trigger
-    // ni jalan tanpa sesi, tiada siapa nampak ralat pun kalau ia meletup).
-    return;
+    // Trigger keluar senyap; butang dapat 'sibuk' supaya admin tahu kenapa tiada apa jadi.
+    return { status: 'sibuk' };
   }
   try {
     // adminEmail diselesaikan SEKALI di sini (bukan dalam catch) supaya catch di bawah
@@ -2160,7 +2188,7 @@ function sendWeeklyDigest_() {
     // Kalau tiada saluran langsung yang lengkap -- tak ada apa nak buat.
     const tgSedia = !!(cfg.BROADCAST_TG_TOKEN && cfg.BROADCAST_TG_CHAT_IDS);
     const gcSedia = !!cfg.BROADCAST_GCHAT_WEBHOOKS;
-    if (!tgSedia && !gcSedia) return;
+    if (!tgSedia && !gcSedia) return { status: 'tiada-saluran' };
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2198,26 +2226,43 @@ function sendWeeklyDigest_() {
     // penanda DGSENT_ dibakar tanpa sebarang mesej keluar dan minggu itu hilang KEKAL
     // walaupun webhook Chat diisi kemudian. Skip SENYAP dan JANGAN set penanda.
     const adaHantar = (tgSedia && tgEvents.length) || (gcSedia && gchatEvents.length);
-    if (!adaHantar) return;
+    if (!adaHantar) return { status: 'tiada-aktiviti' };
 
     const props = PropertiesService.getScriptProperties();
     const kunci = 'DGSENT_' + isoWeekKey_(today);
-    if (props.getProperty(kunci)) return;
+    // Hanya trigger dihalang penanda. Butang manual sengaja memintas: admin yang minta.
+    if (!manual && props.getProperty(kunci)) return { status: 'sudah-dihantar' };
 
     // Senarai kosong TIDAK dihantar: sink yang tiada aktiviti minggu ni tak patut
     // menerima mesej "kosong" yang hanya ada tajuk dan nota kaki.
-    if (tgSedia && tgEvents.length) {
-      sendToTelegram_(buildDigestText_(tgEvents, cfg), cfg.BROADCAST_TG_TOKEN, cfg.BROADCAST_TG_CHAT_IDS);
+    const cubaTg = !!(tgSedia && tgEvents.length);
+    const cubaGc = !!(gcSedia && gchatEvents.length);
+    let tgBerjaya = 0;
+    let gchatBerjaya = 0;
+    if (cubaTg) {
+      tgBerjaya = sendToTelegram_(buildDigestText_(tgEvents, cfg), cfg.BROADCAST_TG_TOKEN, cfg.BROADCAST_TG_CHAT_IDS);
     }
-    if (gcSedia && gchatEvents.length) {
-      sendToGoogleChat_(buildDigestText_(gchatEvents, cfg), cfg.BROADCAST_GCHAT_WEBHOOKS);
+    if (cubaGc) {
+      gchatBerjaya = sendToGoogleChat_(buildDigestText_(gchatEvents, cfg), cfg.BROADCAST_GCHAT_WEBHOOKS);
     }
 
     // Penanda diset SELEPAS cuba semua sink, tanpa mengira kegagalan separa: digest
     // ialah SNAPSHOT mingguan. Cuba semula berisiko menghantar dua kali ke sink yang
     // sudah berjaya; minggu tertinggal boleh diterima (keputusan master, spec 6).
-    props.setProperty(kunci, String(Date.now()));
-    pruneDigestMarkers_();
+    // PENGECUALIAN butang manual: kalau SEMUA sasaran gagal (bot ditendang, webhook
+    // lapuk), jangan bakar penanda -- tiada apa sampai ke ibu bapa, jadi trigger minggu
+    // ni masih patut dibenarkan cuba. Bila ada yang sampai, penanda DISET supaya trigger
+    // tak menghantar kandungan sama sekali lagi.
+    if (!manual || tgBerjaya + gchatBerjaya > 0) {
+      props.setProperty(kunci, String(Date.now()));
+      pruneDigestMarkers_();
+    }
+    return {
+      status: tgBerjaya + gchatBerjaya > 0 ? 'dihantar' : 'gagal',
+      cubaTg: cubaTg, cubaGc: cubaGc,
+      tgBerjaya: tgBerjaya, gchatBerjaya: gchatBerjaya,
+      tgBil: cubaTg ? tgEvents.length : 0, gchatBil: cubaGc ? gchatEvents.length : 0
+    };
   } catch (e) {
     // addAudit_ SENDIRI boleh meletup: LockService.waitLock tamat masa, atau
     // PropertiesService gagal BERTERUSAN (addAudit_ panggil getConfig_() untuk
@@ -2226,6 +2271,7 @@ function sendWeeklyDigest_() {
     // pengecualian kedua lepas keluar, tiada siapa nampak pun. Audit yang hilang
     // lebih murah daripada trigger yang meletup.
     try { addAudit_('DIGEST_RUN_FAILED', e.message, adminEmail); } catch (e2) { /* sengaja senyap */ }
+    return { status: 'ralat' };
     }
   } finally {
     lock.releaseLock();

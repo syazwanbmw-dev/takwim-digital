@@ -504,6 +504,10 @@ function renderSettings(){
             })()
           }</div>
         </div>
+        <div class="field wide"><label>HANTAR SEKARANG</label><div class="eventSub">Hantar aktiviti 7 hari akan datang yang ditanda <b>Kongsi</b> ke Telegram / Google Chat sekarang juga, tanpa tunggu hari hantar mingguan. Ia guna tetapan yang <b>sudah disimpan</b> — tekan Simpan Tetapan dulu kalau baru ubah.</div>
+          <div style="margin-top:8px"><button class="btn" type="button" onclick="sendDigestNowUI(this)">Hantar Sekarang ke Telegram / Google Chat</button></div>
+          <div id="digestNowStatus" class="eventSub" style="margin-top:8px;white-space:pre-line"></div>
+        </div>
         <div class="field wide"><label>DOMAIN EMAIL DIBENARKAN</label><input id="setAllowedDomains" value="${attr(s.allowedEmailDomains||'')}" placeholder="moe-dl.edu.my, sekolahku.edu.my — kosongkan untuk benarkan semua"><div class="eventSub">Hanya email domain ini boleh daftar sendiri. Domain Super Admin mesti termasuk.</div></div>
         <div class="field wide"><label>TEKS FOOTER</label><input id="setFooter" value="${attr(s.footerText||'')}"></div>
         <div class="field wide"><label>IKON (URL GAMBAR)</label><input id="setIconUrl" value="${attr(s.iconUrl||'')}" placeholder="https://.../logo.png — kosongkan untuk guna emoji 🏛️"><div class="eventSub">Direct link ke fail gambar (PNG/SVG/JPG). Mesti bermula https://</div></div>
@@ -532,6 +536,27 @@ function saveSettingsUI(btn){
   gs('updateSystemSettings',[TOKEN,p],r=>{
     unlock();APP_CONFIG=r.config;applyBranding(APP_CONFIG);toast(r.message);renderSettings();
   },e=>{unlock();showError(e)});
+}
+// Terjemah keputusan sendDigestNow (Code.js) jadi ayat untuk admin. Setiap status
+// ada mesej SENDIRI -- butang yang senyap nampak macam rosak.
+function digestNowText(r){
+  const baris=(nama,cuba,bil,berjaya)=>cuba?(berjaya>0?'✅ '+nama+': '+bil+' aktiviti → '+berjaya+' sasaran berjaya':'❌ '+nama+': semua sasaran gagal (semak Audit Log)'):'';
+  switch(r&&r.status){
+    case 'dihantar':
+    case 'gagal':
+      return [baris('Telegram',r.cubaTg,r.tgBil,r.tgBerjaya),baris('Google Chat',r.cubaGc,r.gchatBil,r.gchatBerjaya)].filter(Boolean).join('\n');
+    case 'tiada-aktiviti':return '⚠️ Tiada aktiviti ditanda Kongsi dalam 7 hari akan datang (atau saluran yang ditanda belum diset). Tiada apa dihantar.';
+    case 'tiada-saluran':return '⚠️ Tiada saluran lengkap. Isi token + chat ID Telegram, atau webhook Google Chat, kemudian Simpan Tetapan.';
+    case 'sibuk':return '⏳ Penghantaran lain sedang berjalan. Cuba lagi sebentar.';
+    default:return '❌ Ralat semasa menghantar. Semak Audit Log.';
+  }
+}
+function sendDigestNowUI(btn){
+  if(!confirm('Hantar aktiviti minggu ini ke Telegram / Google Chat SEKARANG?\n\nMesej sebenar akan masuk ke group ibu bapa/murid.'))return;
+  const status=document.getElementById('digestNowStatus');
+  status.textContent='';
+  const unlock=lockBtn(btn,'Menghantar…');
+  gs('sendDigestNow',[TOKEN],r=>{unlock();status.textContent=digestNowText(r)},e=>{unlock();showError(e)});
 }
 function attr(s=''){return esc(s).replace(/"/g,'&quot;')}
 
