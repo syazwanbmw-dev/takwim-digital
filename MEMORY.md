@@ -3,6 +3,35 @@
 > Ingatan projek: status semasa, sejarah, keputusan master, gotcha. Baca lepas `CLAUDE.md`
 > (tiada `CLAUDE.md` lagi untuk projek ni — cipta bila perlu arahan operasi stabil).
 
+## 🆕 2026-10-04 — Butang "Hantar Sekarang" (di `@HEAD`, BELUM deploy production)
+
+🟡 Commit `dad96cc` di `master`, `clasp push` ke **`@HEAD`** sahaja. Production guru kekal `@25`.
+🔴 **SAMBUNG:** master uji butang di `@HEAD` (System Settings → "HANTAR SEKARANG") → bila lulus
+dan master kata "Deploy production" → `create-deployment --deploymentId <ID guru>`. Suite 122/0.
+
+**Kenapa dibina:** Ahad 4 Okt master terlupa tanda "Kongsi" pada aktiviti minggu itu, jadi digest auto
+keluar SENYAP (`adaHantar` palsu, penanda TIDAK dibakar) dan masa trigger sudah lepas. Digest TIDAK rosak.
+- ⚠️ Gejala "digest tak sampai" ada **dua punca berbeza** yang nampak sama dalam Executions (~4s, tiada
+  mesej): (a) penanda `DGSENT_` terbakar (13 Sept), (b) tiada aktiviti bertanda Kongsi (4 Okt). Tanya
+  master "ada tanda Kongsi?" SEBELUM menyiasat penanda.
+
+**Reka bentuk (keputusan master "ok" pada syor Lucy):**
+- `sendWeeklyDigest_` kini cuma `runDigest_(false)`. Teras `runDigest_(manual)` dikongsi trigger + butang
+  (DRY). Pulang `{status,...}`: `sibuk|tiada-saluran|tiada-aktiviti|sudah-dihantar|dihantar|gagal|ralat`.
+  Trigger abaikan pulangan; butang papar mesej per status (butang senyap = nampak rosak).
+- `sendDigestNow(token)`: `requireSession_(token,'canManageUsers')` di SERVER; memintas semakan penanda.
+- Penanda: butang berjaya → TULIS (trigger tak hantar sama dua kali). Semua sasaran gagal → JANGAN bakar
+  (tiada apa sampai ibu bapa). Trigger kekal snapshot lama (bakar walau gagal) — pasangan ujian ada.
+- Audit `DIGEST_MANUAL_SENT` dibungkus try/catch senyap: audit gagal tak boleh jadikan digest yang SUDAH
+  terhantar nampak ralat (admin klik semula = group dapat dua kali).
+- Butang guna tetapan YANG SUDAH DISIMPAN (bukan nilai borang belum simpan) — dinyatakan dalam teks UI.
+- Label UI "HANTAR SEKARANG" tanpa perkataan "digest" (keputusan master 2026-09-08, jargon).
+- Tiada pratonton (KISS) — boleh ditambah kemudian.
+- 7 mutasi digigit & dipulih (bypass penanda, bakar-bila-gagal, tulis-penanda, gerbang dibuang/diturun,
+  confirm dibuang, unlock-failure dibuang). Kod baharu BELUM commit masa mutasi → pulih guna `cp`, bukan git.
+
+---
+
 ## Status Semasa (2026-09-20)
 
 🟢 **LIVE production `@25`** — Google Apps Script, akaun DELIMa (Workspace sekolah).
