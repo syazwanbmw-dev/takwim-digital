@@ -3,11 +3,18 @@
 > Ingatan projek: status semasa, sejarah, keputusan master, gotcha. Baca lepas `CLAUDE.md`
 > (tiada `CLAUDE.md` lagi untuk projek ni — cipta bila perlu arahan operasi stabil).
 
-## 🆕 2026-10-04 — Butang "Hantar Sekarang" (di `@HEAD`, BELUM deploy production)
+## 🆕 2026-10-04 — Butang "Hantar Sekarang" (🟢 LIVE production `@26`)
 
-🟡 Commit `dad96cc` di `master`, `clasp push` ke **`@HEAD`** sahaja. Production guru kekal `@25`.
-🔴 **SAMBUNG:** master uji butang di `@HEAD` (System Settings → "HANTAR SEKARANG") → bila lulus
-dan master kata "Deploy production" → `create-deployment --deploymentId <ID guru>`. Suite 122/0.
+🟢 **LIVE `@26`** atas deploymentId guru yang SAMA (`AKfycbxEF2om…`, URL guru tak berubah), disahkan
+`list-deployments` (`@25`→`@26`). Master uji di `@HEAD` dahulu (butang berfungsi), tegur warna butang
+2 pusingan, kemudian "Deploy production" eksplisit. `master` == `origin/master` @ `6f9a606`. Suite **124/0**.
+Tiada tugasan terbuka untuk ciri ni. Smoke di `@26` sebenar (bukan `@HEAD`) belum direkod master.
+- 🎨 **Gotcha UI:** `.btn` TIADA warna sendiri (cuma padding/radius) — warna datang dari kelas tambahan
+  `primary`/`secondary`/`danger`. `class="btn"` sahaja = kelabu lalai pelayar. `.secondary` guna garis
+  `--line` (#e5ebf3) hampir TAK NAMPAK atas kad putih → butang Hantar Sekarang guna `border:2px solid
+  var(--primary)` inline. Ujian kini menuntut kelas warna DAN garis biru (digigit mutasi).
+- 🧪 **Test `@HEAD` = mesej SEBENAR:** Script Properties (token/chat ID/webhook) dikongsi semua deployment,
+  jadi butang di `@HEAD` hantar ke group sebenar juga. Penanda minggu ditulis selepas berjaya.
 
 **Kenapa dibina:** Ahad 4 Okt master terlupa tanda "Kongsi" pada aktiviti minggu itu, jadi digest auto
 keluar SENYAP (`adaHantar` palsu, penanda TIDAK dibakar) dan masa trigger sudah lepas. Digest TIDAK rosak.
